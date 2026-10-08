@@ -52,7 +52,7 @@ class FraudDetector:
                 break
 
         # 2. IP Velocity Check (Downloads in past hour)
-        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).replace(tzinfo=None)
         velocity_stmt = select(func.count(Download.id)).where(
             Download.ip_hash == ip_h,
             Download.created_at >= one_hour_ago
