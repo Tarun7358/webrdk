@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -8,6 +9,7 @@ import {
   ShieldCheck,
   Sparkles,
   ArrowRight,
+  ArrowLeft,
   QrCode,
   Copy,
   Upload,
@@ -32,6 +34,7 @@ interface Plan {
 
 export const PremiumPage: React.FC = () => {
   const { user, openLoginModal } = useAuth();
+  const navigate = useNavigate();
   const [plans, setPlans] = useState<Plan[]>([
     {
       name: "Free Starter",
@@ -51,7 +54,7 @@ export const PremiumPage: React.FC = () => {
     {
       name: "Pro Gamer",
       tier: "PRO_GAMER",
-      price: 300,
+      price: 299,
       storage_gb: 20,
       max_file_mb: 5000,
       no_ads: true,
@@ -67,7 +70,7 @@ export const PremiumPage: React.FC = () => {
     {
       name: "Creator Studio",
       tier: "CREATOR_STUDIO",
-      price: 800,
+      price: 799,
       storage_gb: 50,
       max_file_mb: 10000,
       no_ads: true,
@@ -205,7 +208,24 @@ export const PremiumPage: React.FC = () => {
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}`;
 
   return (
-    <div className="space-y-12 max-w-6xl mx-auto animate-in fade-in duration-300 pb-16">
+    <div className="space-y-8 max-w-6xl mx-auto animate-in fade-in duration-300 pb-16">
+      {/* Back Button */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/dashboard');
+            }
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-900/80 hover:bg-slate-800 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white text-xs font-bold transition-all hover:-translate-x-0.5 cursor-pointer shadow-md group"
+        >
+          <ArrowLeft className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
+          <span>Back</span>
+        </button>
+      </div>
+
       {/* Title & Headline */}
       <div className="text-center space-y-3">
         <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold uppercase tracking-wider">

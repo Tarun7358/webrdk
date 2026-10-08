@@ -33,7 +33,7 @@ DEFAULT_PLANS = [
     {
         "name": "Pro Gamer",
         "tier": "PRO_GAMER",
-        "price": 300.0,
+        "price": 299.0,
         "storage_gb": 20,
         "max_file_mb": 5000,
         "no_ads": True,
@@ -49,7 +49,7 @@ DEFAULT_PLANS = [
     {
         "name": "Creator Studio",
         "tier": "CREATOR_STUDIO",
-        "price": 800.0,
+        "price": 799.0,
         "storage_gb": 50,
         "max_file_mb": 10000,
         "no_ads": True,
