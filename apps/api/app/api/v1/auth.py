@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
 import secrets
 import asyncio
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from app.core.database import get_db
+
+logger = logging.getLogger("rage.auth")
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_token
 from app.core.dependencies import get_current_user, rate_limit_dependency
 from app.models.schema_models import User, PasswordResetOTP
@@ -170,49 +173,65 @@ async def login_user(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(User).where(User.email == req.email.lower())
-    res = await db.execute(stmt)
-    user = res.scalar_one_or_none()
+    try:
+        clean_email = req.email.lower().strip()
+        stmt = select(User).where(func.lower(User.email) == clean_email)
+        res = await db.execute(stmt)
+        user = res.scalar_one_or_none()
 
-    client_ip = request.client.host if request.client else "unknown"
+        client_ip = request.client.host if request.client else "unknown"
 
-    if not user or not verify_password(req.password, user.password_hash):
-        await AuditService.log_action(
-            action="LOGIN_FAILED",
-            session=db,
-            ip_address=client_ip,
-            details=f"Failed login attempt for {req.email}"
+        if not user or not verify_password(req.password, user.password_hash):
+            try:
+                await AuditService.log_action(
+                    action="LOGIN_FAILED",
+                    session=db,
+                    ip_address=client_ip,
+                    details=f"Failed login attempt for {req.email}"
+                )
+                await db.commit()
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password."
+            )
+
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Your account has been suspended. Please contact platform administration."
+            )
+
+        try:
+            await AuditService.log_action(
+                action="LOGIN",
+                session=db,
+                user_id=user.id,
+                ip_address=client_ip,
+                details=f"User {user.email} logged in successfully"
+            )
+            await db.commit()
+        except Exception:
+            pass
+
+        access_token = create_access_token(user.id, {"role": user.role, "email": user.email})
+        refresh_token = create_refresh_token(user.id)
+
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            user=UserSummaryResponse.model_validate(user)
         )
-        await db.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error in login_user: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Login error: {str(e)}"
         )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Your account has been suspended. Please contact platform administration."
-        )
-
-    await AuditService.log_action(
-        action="LOGIN",
-        session=db,
-        user_id=user.id,
-        ip_address=client_ip,
-        details=f"User {user.email} logged in successfully"
-    )
-    await db.commit()
-
-    access_token = create_access_token(user.id, {"role": user.role, "email": user.email})
-    refresh_token = create_refresh_token(user.id)
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-        user=UserSummaryResponse.model_validate(user)
-    )
 
 @router.post("/refresh")
 async def refresh_access_token(

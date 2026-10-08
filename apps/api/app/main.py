@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select
+from sqlalchemy import select, text, func
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.redis import redis_manager
@@ -25,12 +25,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger("rage.api")
 
+async def run_db_migrations(conn):
+    """Safely apply schema migrations for both PostgreSQL and SQLite"""
+    try:
+        dialect_name = conn.dialect.name
+        logger.info(f"Checking database schema for dialect: {dialect_name}")
+
+        if dialect_name == "postgresql":
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_tier VARCHAR(50) DEFAULT 'FREE';"))
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_limit_bytes BIGINT DEFAULT 10737418240;"))
+            logger.info("PostgreSQL schema migration completed.")
+        else:
+            res = await conn.execute(text("PRAGMA table_info(users)"))
+            cols = [row[1] for row in res.fetchall()]
+            if "plan_tier" not in cols:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN plan_tier VARCHAR(50) DEFAULT 'FREE'"))
+                logger.info("Added plan_tier column to SQLite users table.")
+            if "storage_limit_bytes" not in cols:
+                await conn.execute(text("ALTER TABLE users ADD COLUMN storage_limit_bytes BIGINT DEFAULT 10737418240"))
+                logger.info("Added storage_limit_bytes column to SQLite users table.")
+    except Exception as e:
+        logger.warning(f"Database schema auto-migration notice: {e}")
+
 async def seed_initial_super_admin():
     """Seeds default super admin and owner for platform access"""
     async with AsyncSessionLocal() as session:
         # 1. Platform Owner (rdxyzprvt@gmail.com)
         owner_email = "rdxyzprvt@gmail.com"
-        stmt_owner = select(User).where(User.email == owner_email)
+        stmt_owner = select(User).where(func.lower(User.email) == owner_email.lower())
         res_owner = await session.execute(stmt_owner)
         owner = res_owner.scalar_one_or_none()
         if not owner:
@@ -39,6 +61,8 @@ async def seed_initial_super_admin():
                 password_hash=get_password_hash("clasher@2026"),
                 full_name="RAGE Platform Owner",
                 role="OWNER",
+                plan_tier="CREATOR_STUDIO",
+                storage_limit_bytes=536870912000,
                 is_active=True,
                 is_verified=True,
                 referral_code=ReferralService.generate_referral_code("OWNER")
@@ -57,13 +81,15 @@ async def seed_initial_super_admin():
         else:
             owner.role = "OWNER"
             owner.password_hash = get_password_hash("clasher@2026")
+            owner.plan_tier = "CREATOR_STUDIO"
+            owner.storage_limit_bytes = 536870912000
             owner.is_active = True
             owner.is_verified = True
             logger.info("Existing account updated to role OWNER: rdxyzprvt@gmail.com")
 
         # 2. Default Super Admin
         admin_email = "admin@ragecloud.io"
-        stmt = select(User).where(User.email == admin_email)
+        stmt = select(User).where(func.lower(User.email) == admin_email.lower())
         res = await session.execute(stmt)
         if not res.scalar_one_or_none():
             admin = User(
@@ -100,6 +126,7 @@ async def lifespan(app: FastAPI):
         async with asyncio.timeout(10):
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+                await run_db_migrations(conn)
         logger.info("Primary database schemas initialized successfully.")
         db_ready = True
     except Exception as e:
@@ -111,6 +138,7 @@ async def lifespan(app: FastAPI):
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
+                await run_db_migrations(conn)
             logger.info("Local SQLite schemas initialized successfully.")
             db_ready = True
         except Exception as sqlite_err:
