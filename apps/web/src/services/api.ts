@@ -77,6 +77,7 @@ export const api = {
     return request<any>(`/files/?${params.toString()}`);
   },
   getFile: (id: string) => request<any>(`/files/${id}`),
+  getStorageUsage: () => request<any>('/files/usage/summary'),
   updateFile: (id: string, data: any) => request<any>(`/files/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteFile: (id: string) => request<any>(`/files/${id}`, { method: 'DELETE' }),
 

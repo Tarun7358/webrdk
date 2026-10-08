@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
 import {
   LayoutDashboard,
   FolderOpen,
@@ -17,6 +18,45 @@ import {
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
+  const [liveUsedBytes, setLiveUsedBytes] = useState<number | null>(null);
+
+  const fetchLiveUsage = useCallback(async () => {
+    if (!user) return;
+    try {
+      // 1. Try dedicated endpoint first
+      try {
+        const usage = await api.getStorageUsage();
+        if (usage && typeof usage.storage_used_bytes === 'number' && usage.storage_used_bytes > 0) {
+          setLiveUsedBytes(usage.storage_used_bytes);
+          return;
+        }
+      } catch {
+        // Fall back to files list
+      }
+
+      // 2. Sum active files directly from getMyFiles (100% works across all environments)
+      const files = await api.getMyFiles();
+      if (Array.isArray(files)) {
+        const total = files.reduce((acc: number, f: any) => acc + (Number(f.size) || 0), 0);
+        setLiveUsedBytes(total);
+      }
+    } catch {
+      // Non-blocking fallback
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchLiveUsage();
+
+    const handleUpdate = () => {
+      fetchLiveUsage();
+    };
+
+    window.addEventListener('rage-storage-updated', handleUpdate);
+    return () => {
+      window.removeEventListener('rage-storage-updated', handleUpdate);
+    };
+  }, [fetchLiveUsage]);
 
   const links = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -38,7 +78,12 @@ export const Sidebar: React.FC = () => {
   }
 
   // Real Storage Quota Calculation for the logged-in person's assigned storage
-  const usedBytes = user?.storage_used_bytes ?? 0;
+  const usedBytes = (liveUsedBytes !== null && liveUsedBytes > 0)
+    ? liveUsedBytes
+    : (user?.storage_used_bytes && user.storage_used_bytes > 0
+        ? user.storage_used_bytes
+        : (liveUsedBytes !== null ? liveUsedBytes : 0));
+
   const limitBytes = user?.storage_limit_bytes ?? (10 * 1024 * 1024 * 1024);
 
   const formatStorage = (bytes: number): string => {
@@ -47,7 +92,8 @@ export const Sidebar: React.FC = () => {
     const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     const val = bytes / Math.pow(k, i);
-    const formattedVal = val % 1 === 0 ? val.toString() : val.toFixed(1);
+    // Show 2 decimals for precision under 100 MB/GB (e.g. 27.79 MB)
+    const formattedVal = val % 1 === 0 ? val.toString() : (val < 100 ? val.toFixed(2) : val.toFixed(1));
     return `${formattedVal} ${sizes[i]}`;
   };
 

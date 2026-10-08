@@ -69,6 +69,7 @@ export const UploadPage: React.FC = () => {
       setUploadProgress(100);
       setUploadSuccess(res);
       refreshUser();
+      window.dispatchEvent(new CustomEvent('rage-storage-updated'));
     } catch (err: any) {
       setError(err.message || 'Storage transmission failed');
     } finally {

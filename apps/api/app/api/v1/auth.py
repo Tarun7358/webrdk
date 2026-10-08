@@ -4,7 +4,7 @@ import asyncio
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, func
+from sqlalchemy import select, desc, func, or_
 from app.core.database import get_db
 
 logger = logging.getLogger("rage.auth")
@@ -224,7 +224,8 @@ async def login_user(
         # Calculate real active storage used by user
         stmt_usage = select(func.coalesce(func.sum(File.size), 0)).where(
             File.owner_id == user.id,
-            File.is_deleted == False
+            or_(File.is_deleted == False, File.is_deleted.is_(None)),
+            File.status != "DELETED"
         )
         res_usage = await db.execute(stmt_usage)
         storage_used = res_usage.scalar() or 0
@@ -273,7 +274,8 @@ async def get_current_user_profile(
 ):
     stmt_usage = select(func.coalesce(func.sum(File.size), 0)).where(
         File.owner_id == current_user.id,
-        File.is_deleted == False
+        or_(File.is_deleted == False, File.is_deleted.is_(None)),
+        File.status != "DELETED"
     )
     res_usage = await db.execute(stmt_usage)
     storage_used = res_usage.scalar() or 0

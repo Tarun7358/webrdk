@@ -129,7 +129,11 @@ async def list_my_files(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    query = select(File).where(File.owner_id == current_user.id, File.is_deleted == False)
+    query = select(File).where(
+        File.owner_id == current_user.id,
+        or_(File.is_deleted == False, File.is_deleted.is_(None)),
+        File.status != "DELETED"
+    )
 
     if search:
         query = query.where(or_(File.name.ilike(f"%{search}%"), File.extension.ilike(f"%{search}%")))
@@ -140,6 +144,26 @@ async def list_my_files(
     res = await db.execute(query)
     files = res.scalars().all()
     return [FileResponse.model_validate(f) for f in files]
+
+@router.get("/usage/summary")
+async def get_storage_usage_summary(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    stmt = select(func.coalesce(func.sum(File.size), 0)).where(
+        File.owner_id == current_user.id,
+        or_(File.is_deleted == False, File.is_deleted.is_(None)),
+        File.status != "DELETED"
+    )
+    res = await db.execute(stmt)
+    used = res.scalar() or 0
+    limit = getattr(current_user, "storage_limit_bytes", 10 * 1024 * 1024 * 1024) or (10 * 1024 * 1024 * 1024)
+    return {
+        "storage_used_bytes": int(used),
+        "storage_limit_bytes": int(limit),
+        "plan_tier": getattr(current_user, "plan_tier", "FREE"),
+        "role": current_user.role
+    }
 
 @router.get("/{file_id}", response_model=FileResponse)
 async def get_file_metadata(

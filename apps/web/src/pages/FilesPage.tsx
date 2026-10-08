@@ -60,6 +60,7 @@ export const FilesPage: React.FC = () => {
       await api.deleteFile(fileId);
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
       refreshUser();
+      window.dispatchEvent(new CustomEvent('rage-storage-updated'));
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`);
     }
