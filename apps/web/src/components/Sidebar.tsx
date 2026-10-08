@@ -12,8 +12,7 @@ import {
   Share2,
   Crown,
   ShieldAlert,
-  HardDrive,
-  Sparkles
+  HardDrive
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -117,11 +116,8 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="w-64 border-r border-white/[0.08] bg-[#0d1424]/60 backdrop-blur-xl p-4 flex flex-col justify-between hidden md:flex shrink-0 min-h-[calc(100vh-4rem)]">
       <div className="space-y-6">
-        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-3 flex items-center justify-between">
+        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-3">
           <span>Navigation</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-mono">
-            LIVE
-          </span>
         </div>
         <nav className="space-y-1">
           {links.map((link) => {
@@ -170,8 +166,7 @@ export const Sidebar: React.FC = () => {
 
         <div className="flex justify-between items-center text-[10px] text-slate-400">
           <span>{formatStorage(usedBytes)} used of {formatStorage(limitBytes)}</span>
-          <NavLink to="/pricing" className="text-rose-400 font-bold hover:text-rose-300 flex items-center gap-1 transition-colors">
-            <Sparkles className="w-2.5 h-2.5" />
+          <NavLink to="/pricing" className="text-rose-400 font-bold hover:text-rose-300 transition-colors">
             Boost
           </NavLink>
         </div>

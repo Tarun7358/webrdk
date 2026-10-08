@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text, func
+from sqlalchemy import select, text, func, or_
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.redis import redis_manager
@@ -117,6 +117,29 @@ async def seed_initial_super_admin():
 
         await session.commit()
 
+async def cleanup_test_accounts():
+    """Removes automated test accounts (@test.com) from database on startup"""
+    try:
+        from app.api.v1.owner import delete_user_data
+        async with AsyncSessionLocal() as session:
+            stmt = select(User).where(
+                or_(
+                    User.email.ilike("%@test.com"),
+                    User.email.ilike("test_%@test.com")
+                )
+            )
+            res = await session.execute(stmt)
+            test_users = list(res.scalars().all())
+            to_delete = [u for u in test_users if u.role != "OWNER" and u.email.lower() != "rdxyzprvt@gmail.com"]
+            if to_delete:
+                logger.info(f"Purging {len(to_delete)} testing accounts from database: {[u.email for u in to_delete]}")
+                for u in to_delete:
+                    await delete_user_data(session, u.id)
+                await session.commit()
+                logger.info("Test accounts successfully purged from database.")
+    except Exception as e:
+        logger.warning(f"Test accounts cleanup notice: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global engine, AsyncSessionLocal
@@ -148,6 +171,7 @@ async def lifespan(app: FastAPI):
     if db_ready:
         try:
             await seed_initial_super_admin()
+            await cleanup_test_accounts()
             async with AsyncSessionLocal() as session:
                 await AdService.seed_default_placements(session)
                 await session.commit()

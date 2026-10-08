@@ -126,6 +126,8 @@ export const api = {
   },
   reviewSubscriptionRequest: (id: string, action: string, reviewNote?: string) =>
     request<any>(`/owner/subscriptions/${id}/review`, { method: 'POST', body: JSON.stringify({ action, review_note: reviewNote }) }),
+  purgeTestUsers: () => request<any>('/owner/purge-test-users', { method: 'POST' }),
+  deleteUser: (userId: string) => request<any>(`/owner/users/${userId}`, { method: 'DELETE' }),
 
   // Admin
   getAdminStats: () => request<any>('/admin/stats'),

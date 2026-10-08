@@ -186,9 +186,6 @@ export const FilesPage: React.FC = () => {
                         </div>
                         <div>
                           <div className="font-semibold text-xs truncate max-w-xs">{file.name}</div>
-                          <div className="text-[10px] text-slate-500 font-mono">
-                            SHA: {file.checksum ? file.checksum.slice(0, 14) : 'verified'}...
-                          </div>
                         </div>
                       </div>
                     </td>

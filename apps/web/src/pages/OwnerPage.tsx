@@ -15,7 +15,8 @@ import {
   Lock,
   ArrowRight,
   RefreshCw,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 
 interface OwnerUser {
@@ -76,6 +77,38 @@ export const OwnerPage: React.FC = () => {
 
   // Toast feedback
   const [toast, setToast] = useState<string | null>(null);
+
+  // User deletion state
+  const [purging, setPurging] = useState(false);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  const handlePurgeTestAccounts = async () => {
+    if (!window.confirm("Are you sure you want to delete all testing accounts (@test.com) from Railway SQL database?")) return;
+    setPurging(true);
+    try {
+      const res = await api.purgeTestUsers();
+      showToast(res.message || "Test accounts purged successfully.");
+      await fetchOwnerData();
+    } catch (err: any) {
+      showToast(err.message || "Failed to purge test accounts.");
+    } finally {
+      setPurging(false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string, email: string) => {
+    if (!window.confirm(`Permanently remove ${email} and all associated files from database?`)) return;
+    setDeletingUserId(userId);
+    try {
+      const res = await api.deleteUser(userId);
+      showToast(res.message || `User ${email} removed.`);
+      await fetchOwnerData();
+    } catch (err: any) {
+      showToast(err.message || "Failed to delete user.");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
 
   const isOwner = user?.role === 'OWNER' || user?.email === 'rdxyzprvt@gmail.com';
 
@@ -260,11 +293,7 @@ export const OwnerPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-6 rounded-3xl bg-[#0f172a] border border-rose-500/30 shadow-xl">
         <div>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-bold">
-            <ShieldAlert className="w-3.5 h-3.5" />
-            <span>Platform Owner Control Center</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white font-display mt-2">
+          <h1 className="text-2xl sm:text-3xl font-black text-white font-display">
             RAGE CLOUD Executive Dashboard
           </h1>
           <p className="text-xs text-slate-400 mt-1">
@@ -484,7 +513,7 @@ export const OwnerPage: React.FC = () => {
       {/* TAB 2: USERS & DAILY EARNINGS */}
       {activeTab === 'users' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
@@ -495,6 +524,15 @@ export const OwnerPage: React.FC = () => {
                 className="w-full rounded-xl bg-[#0f172a] border border-white/10 pl-10 pr-4 py-2.5 text-xs text-white placeholder-slate-500 focus:border-rose-500 focus:outline-none"
               />
             </div>
+            <button
+              onClick={handlePurgeTestAccounts}
+              disabled={purging}
+              className="px-4 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer disabled:opacity-50"
+              title="Purge all test accounts from database"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{purging ? 'Purging Test Accounts...' : 'Purge Test Accounts'}</span>
+            </button>
           </div>
 
           <div className="overflow-x-auto rounded-3xl border border-white/10 bg-[#0f172a]">
@@ -509,6 +547,7 @@ export const OwnerPage: React.FC = () => {
                   <th className="p-4">Lifetime Earnings</th>
                   <th className="p-4">Wallet Balance</th>
                   <th className="p-4">Joined Date</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -547,6 +586,19 @@ export const OwnerPage: React.FC = () => {
 
                     <td className="p-4 text-slate-400 text-[11px]">
                       {new Date(u.created_at).toLocaleDateString()}
+                    </td>
+
+                    <td className="p-4 text-right">
+                      {u.role !== 'OWNER' && u.email !== 'rdxyzprvt@gmail.com' && (
+                        <button
+                          onClick={() => handleDeleteUser(u.id, u.email)}
+                          disabled={deletingUserId === u.id}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                          title={`Delete ${u.email}`}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

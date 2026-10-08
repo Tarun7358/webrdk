@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UploadCloud, Shield, LogOut, Wallet, User as UserIcon, Sparkles } from 'lucide-react';
+import { UploadCloud, Shield, LogOut, Wallet, User as UserIcon } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout, openLoginModal, openRegisterModal } = useAuth();
@@ -38,9 +38,8 @@ export const Navbar: React.FC = () => {
           <Link to="/" className="hover:text-white transition-colors">
             Platform
           </Link>
-          <Link to="/pricing" className="hover:text-white transition-colors flex items-center gap-1">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Pricing</span>
+          <Link to="/pricing" className="hover:text-white transition-colors">
+            Pricing
           </Link>
           {user && (
             <>
