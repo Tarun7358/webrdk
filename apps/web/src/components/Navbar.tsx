@@ -11,14 +11,13 @@ export const Navbar: React.FC = () => {
     <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#0b0f19]/80 backdrop-blur-xl">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
-        <Link to="/" className="flex items-center gap-3 group">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-900 to-slate-800 border border-white/10 shadow-lg shadow-rose-600/20 group-hover:scale-105 group-hover:border-rose-500/40 transition-all p-1.5 overflow-hidden">
+        <Link to="/" className="flex items-center gap-3.5 group">
+          <div className="relative flex items-center justify-center">
             <img 
               src="/logo.png" 
               alt="RAGE Logo" 
-              className="w-full h-full object-contain filter invert drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]"
+              className="h-10 w-10 object-contain drop-shadow-[0_0_12px_rgba(244,63,94,0.5)] group-hover:scale-105 group-hover:drop-shadow-[0_0_18px_rgba(244,63,94,0.8)] transition-all"
             />
-            <div className="absolute inset-0 rounded-xl bg-rose-500/10 blur group-hover:bg-rose-500/20 transition-all pointer-events-none" />
           </div>
           <div>
             <div className="font-display font-extrabold text-lg tracking-wider text-white flex items-center gap-1.5">

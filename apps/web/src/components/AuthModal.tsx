@@ -109,13 +109,12 @@ export const AuthModal: React.FC = () => {
 
         {/* Brand Header */}
         <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-tr from-slate-900 to-slate-800 border border-white/10 shadow-xl shadow-rose-600/25 mb-3 p-2 relative overflow-hidden">
+          <div className="inline-flex items-center justify-center mb-3">
             <img 
               src="/logo.png" 
               alt="RAGE Logo" 
-              className="w-full h-full object-contain filter invert drop-shadow-[0_0_8px_rgba(244,63,94,0.5)]" 
+              className="h-16 w-16 object-contain drop-shadow-[0_0_16px_rgba(244,63,94,0.6)]" 
             />
-            <div className="absolute inset-0 rounded-2xl bg-rose-500/10 blur pointer-events-none" />
           </div>
           <h2 className="text-2xl font-black font-display tracking-tight text-white">
             {activeTab === 'login' ? 'Welcome Back to RAGE' : 'Start Earning with RAGE'}
