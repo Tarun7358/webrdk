@@ -20,8 +20,10 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export const FilesPage: React.FC = () => {
+  const { refreshUser } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [search, setSearch] = useState('');
   const [filterVisibility, setFilterVisibility] = useState('');
@@ -57,6 +59,7 @@ export const FilesPage: React.FC = () => {
     try {
       await api.deleteFile(fileId);
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      refreshUser();
     } catch (err: any) {
       alert(`Delete failed: ${err.message}`);
     }

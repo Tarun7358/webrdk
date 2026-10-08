@@ -29,6 +29,7 @@ class UserSummaryResponse(BaseModel):
     role: str
     plan_tier: Optional[str] = "FREE"
     storage_limit_bytes: Optional[int] = 10737418240
+    storage_used_bytes: Optional[int] = 0
     is_active: bool
     is_verified: bool
     referral_code: str

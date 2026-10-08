@@ -10,7 +10,7 @@ from app.core.database import get_db
 logger = logging.getLogger("rage.auth")
 from app.core.security import verify_password, get_password_hash, create_access_token, create_refresh_token, decode_token
 from app.core.dependencies import get_current_user, rate_limit_dependency
-from app.models.schema_models import User, PasswordResetOTP
+from app.models.schema_models import User, PasswordResetOTP, File
 from app.schemas.all_schemas import (
     UserRegisterRequest, UserLoginRequest, TokenResponse,
     RefreshTokenRequest, UserSummaryResponse,
@@ -86,11 +86,14 @@ async def register_user(
     access_token = create_access_token(new_user.id, {"role": new_user.role, "email": new_user.email})
     refresh_token = create_refresh_token(new_user.id)
 
+    user_summary = UserSummaryResponse.model_validate(new_user)
+    user_summary.storage_used_bytes = 0
+
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
         token_type="bearer",
-        user=UserSummaryResponse.model_validate(new_user)
+        user=user_summary
     )
 
 @router.post("/forgot-password")
@@ -218,11 +221,22 @@ async def login_user(
         access_token = create_access_token(user.id, {"role": user.role, "email": user.email})
         refresh_token = create_refresh_token(user.id)
 
+        # Calculate real active storage used by user
+        stmt_usage = select(func.coalesce(func.sum(File.size), 0)).where(
+            File.owner_id == user.id,
+            File.is_deleted == False
+        )
+        res_usage = await db.execute(stmt_usage)
+        storage_used = res_usage.scalar() or 0
+
+        user_summary = UserSummaryResponse.model_validate(user)
+        user_summary.storage_used_bytes = int(storage_used)
+
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            user=UserSummaryResponse.model_validate(user)
+            user=user_summary
         )
     except HTTPException:
         raise
@@ -254,6 +268,16 @@ async def refresh_access_token(
 
 @router.get("/me", response_model=UserSummaryResponse)
 async def get_current_user_profile(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    return UserSummaryResponse.model_validate(current_user)
+    stmt_usage = select(func.coalesce(func.sum(File.size), 0)).where(
+        File.owner_id == current_user.id,
+        File.is_deleted == False
+    )
+    res_usage = await db.execute(stmt_usage)
+    storage_used = res_usage.scalar() or 0
+
+    summary = UserSummaryResponse.model_validate(current_user)
+    summary.storage_used_bytes = int(storage_used)
+    return summary

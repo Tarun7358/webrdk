@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import {
   UploadCloud,
@@ -19,6 +20,7 @@ import {
 } from 'lucide-react';
 
 export const UploadPage: React.FC = () => {
+  const { refreshUser } = useAuth();
   const [selectedFile, setSelectedFile] = useState<globalThis.File | null>(null);
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE' | 'UNLISTED' | 'PAID'>('PUBLIC');
   const [price, setPrice] = useState<number>(49);
@@ -66,6 +68,7 @@ export const UploadPage: React.FC = () => {
       const res = await api.uploadFile(formData);
       setUploadProgress(100);
       setUploadSuccess(res);
+      refreshUser();
     } catch (err: any) {
       setError(err.message || 'Storage transmission failed');
     } finally {

@@ -37,6 +37,37 @@ export const Sidebar: React.FC = () => {
     links.push({ to: '/admin', label: 'Admin Command', icon: ShieldAlert });
   }
 
+  // Real Storage Quota Calculation for the logged-in person's assigned storage
+  const usedBytes = user?.storage_used_bytes ?? 0;
+  const limitBytes = user?.storage_limit_bytes ?? (10 * 1024 * 1024 * 1024);
+
+  const formatStorage = (bytes: number): string => {
+    if (!bytes || bytes <= 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    const val = bytes / Math.pow(k, i);
+    const formattedVal = val % 1 === 0 ? val.toString() : val.toFixed(1);
+    return `${formattedVal} ${sizes[i]}`;
+  };
+
+  const getTierBadge = () => {
+    if (user?.role === 'OWNER' || user?.plan_tier === 'OWNER' || user?.email === 'rdxyzprvt@gmail.com') {
+      return '500 GB Tier';
+    }
+    if (user?.plan_tier === 'CREATOR_STUDIO') {
+      return '50 GB Tier';
+    }
+    if (user?.plan_tier === 'PRO_GAMER') {
+      return '20 GB Tier';
+    }
+    const limitGb = Math.round(limitBytes / (1024 * 1024 * 1024));
+    return `${limitGb || 10} GB Tier`;
+  };
+
+  const percentUsed = Math.min(100, Math.max(0, (usedBytes / limitBytes) * 100));
+  const barWidth = usedBytes > 0 ? Math.max(percentUsed, 2) : 0;
+
   return (
     <aside className="w-64 border-r border-white/[0.08] bg-[#0d1424]/60 backdrop-blur-xl p-4 flex flex-col justify-between hidden md:flex shrink-0 min-h-[calc(100vh-4rem)]">
       <div className="space-y-6">
@@ -77,17 +108,23 @@ export const Sidebar: React.FC = () => {
             <span>Google Drive CDN</span>
           </div>
           <span className="text-emerald-400 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
-            5 TB Tier
+            {getTierBadge()}
           </span>
         </div>
 
-        <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden mb-2.5">
-          <div className="bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 h-full w-[24%]" />
+        <div 
+          className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden mb-2.5"
+          title={`${percentUsed.toFixed(1)}% used`}
+        >
+          <div 
+            className="bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 h-full transition-all duration-500" 
+            style={{ width: `${barWidth}%` }}
+          />
         </div>
 
         <div className="flex justify-between items-center text-[10px] text-slate-400">
-          <span>1.2 TB used of 5 TB</span>
-          <NavLink to="/premium" className="text-rose-400 font-bold hover:text-rose-300 flex items-center gap-1">
+          <span>{formatStorage(usedBytes)} used of {formatStorage(limitBytes)}</span>
+          <NavLink to="/pricing" className="text-rose-400 font-bold hover:text-rose-300 flex items-center gap-1 transition-colors">
             <Sparkles className="w-2.5 h-2.5" />
             Boost
           </NavLink>
