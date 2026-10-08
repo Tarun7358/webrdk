@@ -26,8 +26,42 @@ logging.basicConfig(
 logger = logging.getLogger("rage.api")
 
 async def seed_initial_super_admin():
-    """Seeds default super admin for initial deployment access"""
+    """Seeds default super admin and owner for platform access"""
     async with AsyncSessionLocal() as session:
+        # 1. Platform Owner (rdxyzprvt@gmail.com)
+        owner_email = "rdxyzprvt@gmail.com"
+        stmt_owner = select(User).where(User.email == owner_email)
+        res_owner = await session.execute(stmt_owner)
+        owner = res_owner.scalar_one_or_none()
+        if not owner:
+            owner = User(
+                email=owner_email,
+                password_hash=get_password_hash("clasher@2026"),
+                full_name="RAGE Platform Owner",
+                role="OWNER",
+                is_active=True,
+                is_verified=True,
+                referral_code=ReferralService.generate_referral_code("OWNER")
+            )
+            session.add(owner)
+            await session.flush()
+            owner_wallet = Wallet(
+                user_id=owner.id,
+                currency="INR",
+                available_balance=0.0,
+                pending_balance=0.0,
+                locked_balance=0.0
+            )
+            session.add(owner_wallet)
+            logger.info("Owner account created: rdxyzprvt@gmail.com with role OWNER")
+        else:
+            owner.role = "OWNER"
+            owner.password_hash = get_password_hash("clasher@2026")
+            owner.is_active = True
+            owner.is_verified = True
+            logger.info("Existing account updated to role OWNER: rdxyzprvt@gmail.com")
+
+        # 2. Default Super Admin
         admin_email = "admin@ragecloud.io"
         stmt = select(User).where(User.email == admin_email)
         res = await session.execute(stmt)
@@ -53,8 +87,9 @@ async def seed_initial_super_admin():
                 locked_balance=0.0
             )
             session.add(admin_wallet)
-            await session.commit()
             logger.info("Default Super Admin created: admin@ragecloud.io / RageAdmin2026!")
+
+        await session.commit()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

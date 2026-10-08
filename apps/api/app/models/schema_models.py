@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
-    Column, String, Boolean, Integer, Float, ForeignKey, Text, DateTime, Index
+    Column, String, Boolean, Integer, BigInteger, Float, ForeignKey, Text, DateTime, Index
 )
 from sqlalchemy.orm import relationship
 from app.models.base import BaseModel, utc_now
@@ -11,7 +11,9 @@ class User(BaseModel):
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(255), nullable=False)
-    role = Column(String(50), default="CREATOR", nullable=False) # SUPER_ADMIN, CREATOR, TEAM_OWNER, TEAM_MEMBER, NORMAL_USER
+    role = Column(String(50), default="CREATOR", nullable=False) # OWNER, SUPER_ADMIN, CREATOR, TEAM_OWNER, TEAM_MEMBER, NORMAL_USER
+    plan_tier = Column(String(50), default="FREE", nullable=False) # FREE, PRO_GAMER, CREATOR_STUDIO
+    storage_limit_bytes = Column(BigInteger, default=10 * 1024 * 1024 * 1024, nullable=False) # Default 10GB free
     is_active = Column(Boolean, default=True, nullable=False)
     is_verified = Column(Boolean, default=False, nullable=False)
     avatar_url = Column(String(500), nullable=True)
@@ -281,3 +283,28 @@ class SystemSetting(BaseModel):
     key = Column(String(100), unique=True, index=True, nullable=False)
     value = Column(String(500), nullable=False)
     description = Column(String(255), nullable=True)
+
+class PasswordResetOTP(BaseModel):
+    __tablename__ = "password_reset_otps"
+
+    email = Column(String(255), index=True, nullable=False)
+    otp_code = Column(String(10), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    is_used = Column(Boolean, default=False, nullable=False)
+
+class SubscriptionRequest(BaseModel):
+    __tablename__ = "subscription_requests"
+
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_email = Column(String(255), nullable=False, index=True)
+    plan_tier = Column(String(50), nullable=False) # PRO_GAMER, CREATOR_STUDIO
+    plan_name = Column(String(100), nullable=False)
+    amount_inr = Column(Float, nullable=False)
+    storage_gb = Column(Integer, nullable=False)
+    utr_number = Column(String(100), nullable=False, index=True)
+    proof_image_data = Column(Text, nullable=True) # Data URL or Storage Reference
+    status = Column(String(50), default="PENDING", nullable=False, index=True) # PENDING, APPROVED, REJECTED
+    reviewed_at = Column(DateTime, nullable=True)
+    reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    review_note = Column(Text, nullable=True)
+

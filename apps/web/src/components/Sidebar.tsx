@@ -29,6 +29,10 @@ export const Sidebar: React.FC = () => {
     { to: '/premium', label: 'Plans & Boosters', icon: Crown },
   ];
 
+  if (user?.role === 'OWNER' || user?.email === 'rdxyzprvt@gmail.com') {
+    links.push({ to: '/owner', label: 'Owner Portal', icon: ShieldAlert });
+  }
+
   if (user?.role === 'SUPER_ADMIN') {
     links.push({ to: '/admin', label: 'Admin Command', icon: ShieldAlert });
   }

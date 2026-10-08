@@ -16,6 +16,7 @@ import { TeamsPage } from './pages/TeamsPage';
 import { ReferralsPage } from './pages/ReferralsPage';
 import { PremiumPage } from './pages/PremiumPage';
 import { AdminPage } from './pages/AdminPage';
+import { OwnerPage } from './pages/OwnerPage';
 
 export const App: React.FC = () => {
   return (
@@ -41,7 +42,9 @@ export const App: React.FC = () => {
             <Route path="/referrals" element={<ReferralsPage />} />
             <Route path="/premium" element={<PremiumPage />} />
             <Route path="/admin" element={<AdminPage />} />
+            <Route path="/owner" element={<OwnerPage />} />
           </Route>
+
 
           {/* Catch-all fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

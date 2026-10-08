@@ -69,6 +69,16 @@ export const Navbar: React.FC = () => {
                 <span>Upload</span>
               </Link>
 
+              {(user.role === 'OWNER' || user.email === 'rdxyzprvt@gmail.com') && (
+                <Link
+                  to="/owner"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-300 text-[11px] font-bold uppercase tracking-wider hover:bg-amber-500/20 transition-colors shadow-sm"
+                >
+                  <Shield className="w-3 h-3 text-amber-400" />
+                  <span>Owner</span>
+                </Link>
+              )}
+
               {user.role === 'SUPER_ADMIN' && (
                 <Link
                   to="/admin"

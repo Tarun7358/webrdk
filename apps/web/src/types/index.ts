@@ -2,7 +2,9 @@ export interface User {
   id: string;
   email: string;
   full_name: string;
-  role: 'SUPER_ADMIN' | 'CREATOR' | 'TEAM_OWNER' | 'TEAM_MEMBER' | 'NORMAL_USER';
+  role: 'OWNER' | 'SUPER_ADMIN' | 'CREATOR' | 'TEAM_OWNER' | 'TEAM_MEMBER' | 'NORMAL_USER' | string;
+  plan_tier?: string;
+  storage_limit_bytes?: number;
   is_active: boolean;
   is_verified: boolean;
   referral_code: string;

@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File as FastApiFile, Form, Request
 from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from app.core.database import get_db
 from app.core.config import settings
 from app.core.dependencies import get_current_user, rate_limit_dependency
@@ -46,6 +46,18 @@ async def upload_file(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"File size exceeds maximum limit of {settings.MAX_UPLOAD_SIZE // (1024*1024)}MB."
+        )
+
+    # Enforce Storage Quota (Free: 10GB, Pro Gamer: 20GB, Creator Studio: 50GB)
+    storage_limit = getattr(current_user, "storage_limit_bytes", 10 * 1024 * 1024 * 1024) or (10 * 1024 * 1024 * 1024)
+    stmt_usage = select(func.sum(File.size)).where(File.owner_id == current_user.id, File.is_deleted == False)
+    res_usage = await db.execute(stmt_usage)
+    current_used = res_usage.scalar() or 0
+    if current_used + file_size > storage_limit:
+        storage_limit_gb = round(storage_limit / (1024 * 1024 * 1024), 1)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Storage quota exceeded! Your current vault limit is {storage_limit_gb} GB. Please upgrade your plan to upload more files."
         )
 
     # Compute SHA-256 Checksum

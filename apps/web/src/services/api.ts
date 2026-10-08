@@ -63,6 +63,9 @@ export const api = {
   // Auth
   login: (data: any) => request<any>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
   register: (data: any) => request<any>('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
+  forgotPassword: (email: string) => request<any>('/auth/forgot-password', { method: 'POST', body: JSON.stringify({ email }) }),
+  resetPassword: (data: { email: string; otp_code: string; new_password: string }) =>
+    request<any>('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }),
   getMe: () => request<any>('/auth/me'),
 
   // Files
@@ -109,7 +112,19 @@ export const api = {
 
   // Subscriptions
   getPlans: () => request<any>('/subscriptions/plans'),
+  getSubscriptionPaymentInfo: () => request<any>('/subscriptions/payment-info'),
+  submitSubscriptionRequest: (data: any) => request<any>('/subscriptions/request', { method: 'POST', body: JSON.stringify(data) }),
+  getMySubscriptionRequests: () => request<any>('/subscriptions/my-requests'),
   subscribePlan: (tier: string) => request<any>(`/subscriptions/subscribe/${tier}`, { method: 'POST' }),
+
+  // Owner Portal
+  getOwnerStats: () => request<any>('/owner/stats'),
+  getOwnerSubscriptions: (statusFilter?: string) => {
+    const q = statusFilter ? `?status_filter=${statusFilter}` : '';
+    return request<any>(`/owner/subscriptions${q}`);
+  },
+  reviewSubscriptionRequest: (id: string, action: string, reviewNote?: string) =>
+    request<any>(`/owner/subscriptions/${id}/review`, { method: 'POST', body: JSON.stringify({ action, review_note: reviewNote }) }),
 
   // Admin
   getAdminStats: () => request<any>('/admin/stats'),
@@ -127,3 +142,4 @@ export const api = {
   getFraudAlerts: () => request<any>('/admin/fraud-alerts'),
   getAuditLogs: () => request<any>('/admin/audit-logs'),
 };
+

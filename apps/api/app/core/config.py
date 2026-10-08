@@ -22,6 +22,15 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
     DATABASE_URI: Optional[str] = None
 
+    # GoDaddy SMTP Email
+    SMTP_HOST: str = Field(default="smtpout.secureserver.net")
+    SMTP_PORT: int = Field(default=465)
+    SMTP_USER: str = Field(default="support@ragefps.in")
+    SMTP_PASSWORD: str = Field(default="clasher@2026")
+    SMTP_FROM_EMAIL: str = Field(default="support@ragefps.in")
+    SMTP_FROM_NAME: str = Field(default="RAGE CLOUD")
+    UPI_ID: str = Field(default="rdxyzprvt-1@oksbi")
+
     # Redis
     REDIS_URL: Optional[str] = Field(default="redis://localhost:6379/0")
 

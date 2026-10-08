@@ -27,6 +27,8 @@ class UserSummaryResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    plan_tier: Optional[str] = "FREE"
+    storage_limit_bytes: Optional[int] = 10737418240
     is_active: bool
     is_verified: bool
     referral_code: str
@@ -216,3 +218,65 @@ class SubscriptionPlanResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# ----------------- PASSWORD RESET & SUBSCRIPTION REQUEST SCHEMAS -----------------
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+    new_password: str = Field(min_length=8)
+
+class SubscriptionRequestCreate(BaseModel):
+    plan_tier: str # PRO_GAMER, CREATOR_STUDIO
+    plan_name: str
+    amount_inr: float
+    storage_gb: int
+    utr_number: str
+    proof_image_data: Optional[str] = None # Base64 Data URL or storage ref
+
+class SubscriptionRequestResponse(BaseModel):
+    id: str
+    user_id: str
+    user_email: str
+    plan_tier: str
+    plan_name: str
+    amount_inr: float
+    storage_gb: int
+    utr_number: str
+    proof_image_data: Optional[str] = None
+    status: str
+    created_at: datetime
+    reviewed_at: Optional[datetime] = None
+    review_note: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class SubscriptionReviewRequest(BaseModel):
+    action: str # APPROVE or REJECT
+    review_note: Optional[str] = None
+
+# ----------------- OWNER METRICS & EARNINGS SCHEMAS -----------------
+class OwnerUserEarning(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    role: str
+    plan_tier: str
+    storage_used_bytes: int
+    storage_limit_bytes: int
+    total_files: int
+    daily_earnings: float
+    lifetime_earnings: float
+    available_balance: float
+    created_at: datetime
+
+class OwnerStatsResponse(BaseModel):
+    total_users: int
+    total_files: int
+    total_storage_bytes: int
+    pending_subscription_count: int
+    users: List[OwnerUserEarning]
+
