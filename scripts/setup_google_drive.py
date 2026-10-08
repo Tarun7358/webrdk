@@ -122,22 +122,15 @@ def main():
             print("-" * 70)
             try:
                 creds = flow.run_local_server(
+                    host="localhost",
                     port=args.port,
                     prompt='consent',
-                    access_type='offline'
+                    access_type='offline',
+                    open_browser=True
                 )
             except Exception as e:
                 print(f"[!] Local server on port {args.port} failed: {e}")
-                print("[*] Trying with dynamic port...")
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    secrets_file,
-                    scopes=SCOPES
-                )
-                creds = flow.run_local_server(
-                    port=0,
-                    prompt='consent',
-                    access_type='offline'
-                )
+                sys.exit(1)
 
     token_json = creds.to_json()
     for dest in set(token_destinations):
