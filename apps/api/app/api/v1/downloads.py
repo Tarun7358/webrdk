@@ -99,16 +99,19 @@ async def trigger_download(
         local_svc = LocalStorage()
         target_key = file.storage_key or file.id
         path = local_svc._resolve_path(target_key)
-        if path and os.path.exists(path):
-            return FileResponse(
-                path=path,
-                media_type=file.mime_type,
-                filename=file.name,
-                headers={
-                    "X-RAGE-Traffic-Status": "QUALIFIED" if fraud_eval["is_qualified"] else "UNQUALIFIED"
-                }
+        if not path or not os.path.exists(path):
+            raise HTTPException(
+                status_code=404,
+                detail=f"File binary '{file.name}' was not found on the local storage server (it may have been uploaded prior to a server restart). Please upload the file again."
             )
-        storage_svc = local_svc
+        return FileResponse(
+            path=path,
+            media_type=file.mime_type,
+            filename=file.name,
+            headers={
+                "X-RAGE-Traffic-Status": "QUALIFIED" if fraud_eval["is_qualified"] else "UNQUALIFIED"
+            }
+        )
     else:
         storage_svc = get_storage_service()
         target_key = file.google_drive_file_id or file.storage_key or file.id
