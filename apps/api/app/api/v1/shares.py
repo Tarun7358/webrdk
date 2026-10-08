@@ -48,7 +48,7 @@ async def create_share_link(
 
     expires_at = None
     if req.expires_in_hours:
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=req.expires_in_hours)
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_in_hours)).replace(tzinfo=None)
 
     pw_hash = get_password_hash(req.password) if req.password else None
 
@@ -101,7 +101,7 @@ async def get_public_download_page_data(
 
     share_link, file, creator = row
 
-    if share_link.expires_at and share_link.expires_at.replace(tzinfo=timezone.utc) < datetime.now(timezone.utc):
+    if share_link.expires_at and share_link.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="This share link has expired")
 
     if share_link.download_limit and share_link.download_count >= share_link.download_limit:

@@ -155,9 +155,17 @@ import traceback
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global unhandled exception on {request.method} {request.url}: {exc}\n{traceback.format_exc()}")
+    origin = request.headers.get("origin") or "*"
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Methods": "*",
+        "Access-Control-Allow-Headers": "*",
+    }
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error", "error": str(exc), "type": exc.__class__.__name__}
+        content={"detail": "Internal Server Error", "error": str(exc), "type": exc.__class__.__name__},
+        headers=headers
     )
 
 # Mount APIs
