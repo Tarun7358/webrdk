@@ -1,0 +1,17 @@
+# Netlify configuration for RAGE Cloud Frontend (apps/web)
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Proxy /api requests to Railway Backend if needed, or rely on VITE_API_URL
+# [[redirects]]
+#   from = "/api/*"
+#   to = "https://YOUR-RAILWAY-APP.up.railway.app/api/:splat"
+#   status = 200
+#   force = true
+
+# SPA fallback rule for React Router
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
