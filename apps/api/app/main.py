@@ -149,6 +149,17 @@ async def request_logging_middleware(request: Request, call_next):
     response.headers["X-Request-ID"] = req_id
     return response
 
+import traceback
+
+# Global exception handler to capture and log any unhandled runtime errors
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Global unhandled exception on {request.method} {request.url}: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc), "type": exc.__class__.__name__}
+    )
+
 # Mount APIs
 app.include_router(api_v1_router)
 
