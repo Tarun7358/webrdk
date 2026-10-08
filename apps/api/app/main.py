@@ -93,7 +93,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration
+# CORS configuration - supports custom domains (ragefps.in, netlify.app, etc.) and credentials
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -102,8 +102,9 @@ app.add_middleware(
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
         "https://rdkcloudservices.netlify.app",
+        "https://ragecloudservices.ragefps.in",
     ],
-    allow_origin_regex=r"https://.*\.netlify\.app|http://localhost:\d+|http://127\.0\.0\.1:\d+",
+    allow_origin_regex=r"https://.*|http://localhost:\d+|http://127\.0\.0\.1:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
