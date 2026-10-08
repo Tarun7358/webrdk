@@ -7,7 +7,8 @@ def generate_uuid() -> str:
     return str(uuid.uuid4())
 
 def utc_now() -> datetime:
-    return datetime.now(timezone.utc)
+    # Returns naive UTC datetime compatible with PostgreSQL TIMESTAMP WITHOUT TIME ZONE
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 class BaseModel(Base):
     __abstract__ = True

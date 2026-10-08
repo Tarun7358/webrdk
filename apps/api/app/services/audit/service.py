@@ -29,4 +29,8 @@ class AuditService:
             await session.flush()
         except Exception as e:
             logger.error(f"Failed to record audit log: {e}")
+            try:
+                await session.rollback()
+            except Exception:
+                pass
         return log_entry
