@@ -174,6 +174,16 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Mount APIs
 app.include_router(api_v1_router)
 
+@app.get("/", tags=["Root"])
+async def root():
+    return {
+        "app": "RAGE Cloud Services API",
+        "version": "1.0.0",
+        "status": "online",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
 @app.get("/health", tags=["Health"])
 async def health_check():
     return {
