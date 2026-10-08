@@ -32,8 +32,8 @@ export const FilesPage: React.FC = () => {
   // Share Modal State
   const [activeFileForShare, setActiveFileForShare] = useState<FileItem | null>(null);
   const [sharePassword, setSharePassword] = useState('');
-  const [shareExpiryHours, setShareExpiryHours] = useState<number>(24);
-  const [shareLimit, setShareLimit] = useState<number | ''>('');
+  const [shareExpiryHours, setShareExpiryHours] = useState<number | ''>(''); // '' means Unlimited (Never Expires)
+  const [shareLimit, setShareLimit] = useState<number | ''>(''); // '' means Unlimited
   const [createdShare, setCreatedShare] = useState<ShareLink | null>(null);
   const [shareLoading, setShareLoading] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -74,8 +74,8 @@ export const FilesPage: React.FC = () => {
       const res = await api.createShareLink({
         file_id: activeFileForShare.id,
         password: sharePassword || undefined,
-        expires_in_hours: shareExpiryHours || undefined,
-        download_limit: shareLimit ? Number(shareLimit) : undefined
+        expires_in_hours: (shareExpiryHours !== '' && Number(shareExpiryHours) > 0) ? Number(shareExpiryHours) : undefined,
+        download_limit: (shareLimit !== '' && Number(shareLimit) > 0) ? Number(shareLimit) : undefined
       });
       setCreatedShare(res);
     } catch (err: any) {
@@ -219,6 +219,9 @@ export const FilesPage: React.FC = () => {
                           onClick={() => {
                             setActiveFileForShare(file);
                             setCreatedShare(null);
+                            setSharePassword('');
+                            setShareExpiryHours('');
+                            setShareLimit('');
                           }}
                           title="Generate Protected Share Link"
                           className="p-2 rounded-lg bg-slate-800/80 border border-white/5 hover:border-rose-500/50 hover:text-rose-400 text-slate-300 transition-colors cursor-pointer"
@@ -282,9 +285,14 @@ export const FilesPage: React.FC = () => {
             {createdShare ? (
               <div className="space-y-4 pt-2">
                 <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/30">
-                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold mb-1">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Gateway Link Live</span>
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Gateway Link Live</span>
+                    </div>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-bold">
+                      {createdShare.expires_at ? `Expires: ${new Date(createdShare.expires_at).toLocaleDateString()}` : '∞ Unlimited (Never Expires)'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-2">
                     <span className="font-mono text-xs text-slate-200 break-all select-all">
@@ -332,34 +340,152 @@ export const FilesPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
+                  {/* Link Expiry with Unlimited option */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      Expires In (Hours)
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Link Expiration
+                      </label>
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                        shareExpiryHours === ''
+                          ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
+                          : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                      }`}>
+                        {shareExpiryHours === '' ? '∞ Unlimited (Never)' : `${shareExpiryHours}h`}
+                      </span>
+                    </div>
+
+                    {/* Quick preset selector */}
+                    <div className="grid grid-cols-4 gap-1.5 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setShareExpiryHours('')}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareExpiryHours === ''
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        ∞ Unlimited
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareExpiryHours(24)}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareExpiryHours === 24
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        24 Hours
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareExpiryHours(168)}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareExpiryHours === 168
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        7 Days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareExpiryHours(720)}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareExpiryHours === 720
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        30 Days
+                      </button>
+                    </div>
+
                     <div className="relative">
                       <Clock className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                       <input
                         type="number"
                         min="1"
-                        max="720"
+                        placeholder="Unlimited (Leave blank for permanent link)"
                         value={shareExpiryHours}
-                        onChange={(e) => setShareExpiryHours(Number(e.target.value))}
-                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                        onChange={(e) => setShareExpiryHours(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"
                       />
                     </div>
                   </div>
+
+                  {/* Download Limit with Unlimited option */}
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
-                      Download Limit
-                    </label>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                        Download Limit
+                      </label>
+                      <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ${
+                        shareLimit === ''
+                          ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20'
+                          : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'
+                      }`}>
+                        {shareLimit === '' ? '∞ Unlimited' : `${shareLimit} max`}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5 mb-2">
+                      <button
+                        type="button"
+                        onClick={() => setShareLimit('')}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareLimit === ''
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        ∞ Unlimited
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareLimit(10)}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareLimit === 10
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        10 dl
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareLimit(50)}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareLimit === 50
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        50 dl
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShareLimit(100)}
+                        className={`py-1.5 px-1.5 rounded-xl text-[10px] font-bold transition-all cursor-pointer text-center ${
+                          shareLimit === 100
+                            ? 'bg-rose-500/20 text-white border border-rose-500/50 shadow-sm shadow-rose-500/10'
+                            : 'bg-slate-900 text-slate-400 border border-white/5 hover:text-white hover:bg-slate-800'
+                        }`}
+                      >
+                        100 dl
+                      </button>
+                    </div>
+
                     <input
                       type="number"
                       min="1"
-                      placeholder="Unlimited"
+                      placeholder="Unlimited (No download limit)"
                       value={shareLimit}
-                      onChange={(e) => setShareLimit(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                      onChange={(e) => setShareLimit(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                      className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-rose-500"
                     />
                   </div>
                 </div>

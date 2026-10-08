@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from app.core.database import get_db
 from app.core.security import verify_password, get_password_hash
 from app.core.dependencies import get_current_user, rate_limit_dependency
@@ -28,7 +28,11 @@ async def create_share_link(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(File).where(File.id == req.file_id, File.is_deleted == False)
+    stmt = select(File).where(
+        File.id == req.file_id,
+        or_(File.is_deleted == False, File.is_deleted.is_(None)),
+        File.status != "DELETED"
+    )
     res = await db.execute(stmt)
     file = res.scalar_one_or_none()
 
@@ -46,8 +50,9 @@ async def create_share_link(
             break
         short_code = generate_short_code()
 
+    # None or 0 means UNLIMITED (never expires)
     expires_at = None
-    if req.expires_in_hours:
+    if req.expires_in_hours and req.expires_in_hours > 0:
         expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_in_hours)).replace(tzinfo=None)
 
     pw_hash = get_password_hash(req.password) if req.password else None

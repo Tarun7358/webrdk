@@ -39,6 +39,14 @@ async def trigger_download(
 
     share_link, file = row
 
+    # Expiry validation (None means unlimited)
+    if share_link.expires_at and share_link.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+        raise HTTPException(status_code=410, detail="This download link has expired")
+
+    # Download limit validation (None means unlimited)
+    if share_link.download_limit and share_link.download_count >= share_link.download_limit:
+        raise HTTPException(status_code=410, detail="Download limit reached for this share link")
+
     # Password check
     if share_link.password_hash and not password:
         raise HTTPException(status_code=401, detail="Password required to download this file")
