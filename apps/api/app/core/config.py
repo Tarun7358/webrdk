@@ -19,15 +19,8 @@ class Settings(BaseSettings):
     ]
 
     # Database
-    DATABASE_URL: str = Field(
-        default_factory=lambda: (
-            os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./rage_cloud.db")
-            .replace("postgres://", "postgresql+asyncpg://")
-            .replace("postgresql://", "postgresql+asyncpg://")
-            if "postgresql+asyncpg" not in os.environ.get("DATABASE_URL", "") and "sqlite" not in os.environ.get("DATABASE_URL", "")
-            else os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./rage_cloud.db")
-        )
-    )
+    DATABASE_URL: Optional[str] = None
+    DATABASE_URI: Optional[str] = None
 
     # Redis
     REDIS_URL: Optional[str] = Field(default="redis://localhost:6379/0")

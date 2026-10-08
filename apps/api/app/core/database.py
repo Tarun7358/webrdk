@@ -8,10 +8,16 @@ from app.core.config import settings
 logger = logging.getLogger("rage.database")
 
 def resolve_database_url() -> str:
-    url = os.environ.get("DATABASE_URL") or getattr(settings, "DATABASE_URL", None)
+    url = (
+        os.environ.get("DATABASE_URL")
+        or os.environ.get("DATABASE_URI")
+        or os.environ.get("DATABASE_PUBLIC_URL")
+        or getattr(settings, "DATABASE_URL", None)
+        or getattr(settings, "DATABASE_URI", None)
+    )
     # Check if empty, invalid, or an unrendered variable like ${{Postgres.DATABASE_URL}}
     if not url or not isinstance(url, str) or not url.strip() or url.strip().lower() in ("none", "null") or url.strip().startswith("${{"):
-        logger.warning("DATABASE_URL is missing, unrendered, or invalid. Falling back to SQLite.")
+        logger.warning("DATABASE_URL/DATABASE_URI is missing, unrendered, or invalid. Falling back to SQLite.")
         return "sqlite+aiosqlite:///./rage_cloud.db"
     
     clean_url = url.strip()
@@ -32,6 +38,9 @@ logger.info(f"Database dialect initialized with: {db_url.split('@')[0] if '@' in
 connect_args = {}
 if db_url.startswith("sqlite"):
     connect_args["check_same_thread"] = False
+elif "postgresql+asyncpg" in db_url:
+    connect_args["timeout"] = 10
+    connect_args["command_timeout"] = 15
 
 try:
     engine = create_async_engine(

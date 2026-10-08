@@ -58,19 +58,44 @@ async def seed_initial_super_admin():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global engine, AsyncSessionLocal
     # Startup: Ensure tables exist
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    logger.info("Database schemas initialized.")
+    db_ready = False
+    try:
+        async with asyncio.timeout(10):
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        logger.info("Primary database schemas initialized successfully.")
+        db_ready = True
+    except Exception as e:
+        logger.error(f"Failed to connect to primary database ({e}). Reverting to persistent local SQLite.")
+        from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+        sqlite_url = "sqlite+aiosqlite:///./rage_cloud.db"
+        engine = create_async_engine(sqlite_url, connect_args={"check_same_thread": False})
+        AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Local SQLite schemas initialized successfully.")
+            db_ready = True
+        except Exception as sqlite_err:
+            logger.error(f"Fallback SQLite schema initialization failed: {sqlite_err}")
 
-    # Seed Admin & Ad placements
-    await seed_initial_super_admin()
-    async with AsyncSessionLocal() as session:
-        await AdService.seed_default_placements(session)
-        await session.commit()
+    # Seed Admin & Ad placements if database is ready
+    if db_ready:
+        try:
+            await seed_initial_super_admin()
+            async with AsyncSessionLocal() as session:
+                await AdService.seed_default_placements(session)
+                await session.commit()
+        except Exception as seed_err:
+            logger.warning(f"Seeding skipped or already initialized: {seed_err}")
 
-    # Connect Redis
-    await redis_manager.connect()
+    # Connect Redis (optional)
+    try:
+        await redis_manager.connect()
+    except Exception as redis_err:
+        logger.warning(f"Redis connection skipped: {redis_err}")
 
     # Initialize storage provider
     storage = get_storage_service()
@@ -83,7 +108,10 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     worker_task.cancel()
-    await redis_manager.disconnect()
+    try:
+        await redis_manager.disconnect()
+    except Exception:
+        pass
     logger.info("RAGE Cloud API shutdown complete.")
 
 app = FastAPI(
@@ -131,5 +159,6 @@ async def health_check():
         "app": "RAGE Cloud",
         "version": "1.0.0",
         "storage_provider": get_storage_service().__class__.__name__,
-        "redis_connected": redis_manager.client is not None
+        "redis_connected": redis_manager.client is not None,
+        "database": "postgresql" if "postgresql" in str(engine.url) else "sqlite"
     }
