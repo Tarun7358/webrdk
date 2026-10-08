@@ -24,10 +24,24 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (err: any) {
+    throw new Error(
+      `Unable to reach backend API at ${API_BASE}. Make sure your Railway backend is running with a generated public domain, and VITE_API_URL is configured in Netlify.`
+    );
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('text/html')) {
+    throw new Error(
+      `Backend URL misconfigured: Received HTML instead of JSON from ${API_BASE}${endpoint}. Please add VITE_API_URL in Netlify Environment Variables pointing to your Railway backend.`
+    );
+  }
 
   if (!response.ok) {
     let errorDetail = 'An unexpected error occurred';
