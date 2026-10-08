@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Flame, UploadCloud, Shield, LogOut, Wallet, User as UserIcon, Sparkles } from 'lucide-react';
+import { UploadCloud, Shield, LogOut, Wallet, User as UserIcon, Sparkles } from 'lucide-react';
 
 export const Navbar: React.FC = () => {
   const { user, logout, openLoginModal, openRegisterModal } = useAuth();
@@ -12,9 +12,13 @@ export const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 shadow-md shadow-rose-600/30 group-hover:scale-105 transition-all">
-            <Flame className="w-5 h-5 text-white" />
-            <div className="absolute inset-0 rounded-xl bg-rose-400/20 blur group-hover:blur-md transition-all" />
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-900 to-slate-800 border border-white/10 shadow-lg shadow-rose-600/20 group-hover:scale-105 group-hover:border-rose-500/40 transition-all p-1.5 overflow-hidden">
+            <img 
+              src="/logo.png" 
+              alt="RAGE Logo" 
+              className="w-full h-full object-contain filter invert drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]"
+            />
+            <div className="absolute inset-0 rounded-xl bg-rose-500/10 blur group-hover:bg-rose-500/20 transition-all pointer-events-none" />
           </div>
           <div>
             <div className="font-display font-extrabold text-lg tracking-wider text-white flex items-center gap-1.5">

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Flame,
   TrendingUp,
   ShieldCheck,
   ArrowRight,
@@ -269,7 +268,7 @@ export const LandingPage: React.FC = () => {
       <footer className="mt-auto border-t border-white/[0.08] bg-[#080b12] py-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 gap-4">
           <div className="flex items-center gap-2.5">
-            <Flame className="w-4 h-4 text-rose-500" />
+            <img src="/logo.png" alt="RAGE Logo" className="w-5 h-5 object-contain filter invert drop-shadow-[0_0_4px_rgba(244,63,94,0.4)]" />
             <span className="font-bold text-slate-300">RAGE Cloud Platform</span>
             <span>&copy; 2026. All rights reserved.</span>
           </div>

@@ -5,7 +5,6 @@ import type { PublicDownloadPageData } from '../types';
 import {
   Download,
   ShieldCheck,
-  Flame,
   File,
   Lock,
   DollarSign,
@@ -161,12 +160,17 @@ export const DownloadPage: React.FC = () => {
       {/* Top Header */}
       <header className="border-b border-white/5 bg-black/40 backdrop-blur-xl px-6 py-4 flex items-center justify-between sticky top-0 z-40">
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rage-accent to-red-800 flex items-center justify-center shadow-rage-glow-sm group-hover:scale-105 transition-transform">
-            <Flame className="w-5 h-5 text-white" />
+          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-slate-900 to-slate-800 border border-white/10 shadow-lg shadow-rose-600/20 group-hover:scale-105 group-hover:border-rose-500/40 transition-all p-1.5 overflow-hidden">
+            <img 
+              src="/logo.png" 
+              alt="RAGE Logo" 
+              className="w-full h-full object-contain filter invert drop-shadow-[0_0_8px_rgba(244,63,94,0.4)]"
+            />
+            <div className="absolute inset-0 rounded-xl bg-rose-500/10 blur group-hover:bg-rose-500/20 transition-all pointer-events-none" />
           </div>
           <div className="flex flex-col">
             <span className="font-display font-black text-sm tracking-wider text-white">
-              RAGE <span className="text-rage-accent">CLOUD</span>
+              RAGE <span className="text-rose-500">CLOUD</span>
             </span>
             <span className="text-[10px] text-gray-400 font-mono">Edge CDN Portal</span>
           </div>
