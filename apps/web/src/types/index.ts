@@ -28,6 +28,7 @@ export interface FileItem {
   updated_at: string;
   owner_id: string;
   share_url?: string;
+  short_code?: string;
 }
 
 export interface ShareLink {

@@ -8,7 +8,11 @@ import {
   Lock,
   CheckCircle2,
   AlertCircle,
-  FileText
+  FileText,
+  Building,
+  QrCode,
+  X,
+  ShieldCheck
 } from 'lucide-react';
 
 export const WalletPage: React.FC = () => {
@@ -52,9 +56,9 @@ export const WalletPage: React.FC = () => {
 
   if (isLoading && !wallet) {
     return (
-      <div className="py-20 text-center">
-        <div className="w-8 h-8 border-4 border-rage-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-gray-400 text-xs font-mono">Syncing Cryptographic Ledger & Balances...</p>
+      <div className="py-24 text-center space-y-3">
+        <div className="w-10 h-10 border-3 border-rage-accent border-t-transparent rounded-full animate-spin mx-auto" />
+        <p className="text-gray-400 text-xs font-mono">Syncing Cryptographic Double-Entry Ledger...</p>
       </div>
     );
   }
@@ -77,31 +81,38 @@ export const WalletPage: React.FC = () => {
       setShowWithdrawModal(false);
       loadData();
     } catch (err: any) {
-      setModalError(err.message || 'Withdrawal failed');
+      setModalError(err.message || 'Withdrawal transmission failed');
     } finally {
       setWithdrawLoading(false);
     }
   };
 
   return (
-    <div className="space-y-8">
-      {/* Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Title Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
-          <h1 className="text-2xl font-black text-white font-display flex items-center gap-2">
-            <WalletIcon className="w-6 h-6 text-rage-accent" />
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-bold tracking-wider uppercase inline-flex items-center gap-1.5">
+              <ShieldCheck className="w-3 h-3" />
+              <span>Double-Entry Verified</span>
+            </span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight flex items-center gap-2.5">
+            <WalletIcon className="w-7 h-7 text-rage-accent" />
             <span>Wallet & Immutable Ledger</span>
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Cryptographically tracked double-entry ledger. All earnings and payouts are strictly auditable.
+          <p className="text-xs sm:text-sm text-gray-400 mt-1 max-w-xl">
+            Cryptographically audited creator balances. Direct payout routing via UPI and instant IMPS banking.
           </p>
         </div>
+
         <button
           onClick={() => {
             setModalError(null);
             setShowWithdrawModal(true);
           }}
-          className="flex items-center gap-2 px-5 py-2.5 bg-rage-accent hover:bg-rage-600 text-white font-bold text-xs rounded-xl shadow-rage-glow-sm hover:scale-[1.02] transition-all"
+          className="flex items-center gap-2 px-5 py-3 bg-rage-accent hover:bg-rage-600 text-white font-extrabold text-xs rounded-xl shadow-rage-glow hover:scale-[1.02] active:scale-95 transition-all self-start sm:self-auto"
         >
           <ArrowUpRight className="w-4 h-4" />
           <span>Request Payout</span>
@@ -110,72 +121,95 @@ export const WalletPage: React.FC = () => {
 
       {/* Balances Card Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="glass-panel p-6 rounded-3xl border border-dark-border">
-          <div className="flex items-center justify-between text-gray-400 mb-2">
-            <span className="text-xs uppercase font-semibold tracking-wider">Available Balance</span>
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+        {/* Available Balance */}
+        <div className="glass-panel p-6 sm:p-7 rounded-3xl border border-emerald-500/30 relative overflow-hidden group shadow-lg">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+          <div className="flex items-center justify-between text-gray-400 mb-3">
+            <span className="text-[11px] uppercase font-bold tracking-wider text-emerald-400">Available For Payout</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center">
+              <CheckCircle2 className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-3xl font-black text-emerald-400 font-mono">
+          <div className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono tracking-tight">
             ₹{wallet?.available_balance.toFixed(2) || '0.00'}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Ready for instant withdrawal request</div>
+          <div className="text-xs text-gray-500 mt-2 font-mono">
+            Directly withdrawable to any verified UPI VPA
+          </div>
         </div>
 
-        <div className="glass-panel p-6 rounded-3xl border border-dark-border">
-          <div className="flex items-center justify-between text-gray-400 mb-2">
-            <span className="text-xs uppercase font-semibold tracking-wider">Locked (In Review)</span>
-            <Lock className="w-5 h-5 text-amber-400" />
+        {/* Locked Balance */}
+        <div className="glass-panel p-6 sm:p-7 rounded-3xl border border-white/10 relative overflow-hidden group">
+          <div className="flex items-center justify-between text-gray-400 mb-3">
+            <span className="text-[11px] uppercase font-bold tracking-wider">Locked (In Review)</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+              <Lock className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-3xl font-black text-white font-mono">
+          <div className="text-3xl sm:text-4xl font-black text-white font-mono tracking-tight">
             ₹{wallet?.locked_balance.toFixed(2) || '0.00'}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Pending admin / compliance payout approval</div>
+          <div className="text-xs text-gray-500 mt-2 font-mono">
+            Pending admin authorization or anti-bot clearance
+          </div>
         </div>
 
-        <div className="glass-panel p-6 rounded-3xl border border-dark-border">
-          <div className="flex items-center justify-between text-gray-400 mb-2">
-            <span className="text-xs uppercase font-semibold tracking-wider">Total Lifetime Processed</span>
-            <Clock className="w-5 h-5 text-rage-400" />
+        {/* Total Lifetime Processed */}
+        <div className="glass-panel p-6 sm:p-7 rounded-3xl border border-white/10 relative overflow-hidden group">
+          <div className="flex items-center justify-between text-gray-400 mb-3">
+            <span className="text-[11px] uppercase font-bold tracking-wider">Total Lifetime Yield</span>
+            <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 text-blue-400 flex items-center justify-center">
+              <Clock className="w-4 h-4" />
+            </div>
           </div>
-          <div className="text-3xl font-black text-white font-mono">
+          <div className="text-3xl sm:text-4xl font-black text-white font-mono tracking-tight">
             ₹{wallet?.total_balance.toFixed(2) || '0.00'}
           </div>
-          <div className="text-xs text-gray-500 mt-1">Cumulative creator revenue credited</div>
+          <div className="text-xs text-gray-500 mt-2 font-mono">
+            Cumulative creator revenues and bonuses
+          </div>
         </div>
       </div>
 
-      {/* Withdrawals In Flight */}
+      {/* Payouts In Flight */}
       {withdrawals.length > 0 && (
-        <div className="glass-panel p-6 rounded-3xl border border-dark-border space-y-4">
-          <h2 className="text-base font-bold text-white font-display">Recent Payout Requests</h2>
+        <div className="glass-panel p-6 sm:p-7 rounded-3xl border border-white/10 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-white font-display">Recent Payout Requests</h2>
+            <span className="text-xs text-gray-400 font-mono">{withdrawals.length} Dispatched</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="text-gray-500 uppercase border-b border-dark-border/60">
+              <thead className="text-gray-400 uppercase text-[10px] tracking-wider border-b border-white/10">
                 <tr>
-                  <th className="pb-2.5">Date</th>
-                  <th className="pb-2.5">Amount</th>
-                  <th className="pb-2.5">Method</th>
-                  <th className="pb-2.5">Status</th>
-                  <th className="pb-2.5">Admin Note</th>
+                  <th className="pb-3">Date</th>
+                  <th className="pb-3">Amount</th>
+                  <th className="pb-3">Method</th>
+                  <th className="pb-3">Status</th>
+                  <th className="pb-3">Audit Note</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark-border/40 text-gray-300 font-mono">
+              <tbody className="divide-y divide-white/5 text-gray-300 font-mono">
                 {withdrawals.map((w) => (
-                  <tr key={w.id}>
-                    <td className="py-2.5 text-gray-400">{new Date(w.created_at).toLocaleDateString()}</td>
-                    <td className="py-2.5 font-bold text-white">₹{w.amount.toFixed(2)}</td>
-                    <td className="py-2.5">{w.payout_method}</td>
-                    <td className="py-2.5">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        w.status === 'COMPLETED' ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40' :
-                        w.status === 'APPROVED' ? 'bg-blue-950/40 text-blue-400 border border-blue-800/40' :
-                        w.status === 'REJECTED' ? 'bg-red-950/40 text-red-400 border border-red-800/40' :
-                        'bg-amber-950/40 text-amber-400 border border-amber-800/40'
+                  <tr key={w.id} className="hover:bg-white/[0.02]">
+                    <td className="py-3 text-gray-400">{new Date(w.created_at).toLocaleDateString()}</td>
+                    <td className="py-3 font-bold text-white text-sm">₹{w.amount.toFixed(2)}</td>
+                    <td className="py-3">
+                      <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[11px]">
+                        {w.payout_method}
+                      </span>
+                    </td>
+                    <td className="py-3">
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                        w.status === 'COMPLETED' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-500/40' :
+                        w.status === 'APPROVED' ? 'bg-blue-950/60 text-blue-400 border border-blue-500/40' :
+                        w.status === 'REJECTED' ? 'bg-red-950/60 text-red-400 border border-red-500/40' :
+                        'bg-amber-950/60 text-amber-400 border border-amber-500/40'
                       }`}>
                         {w.status}
                       </span>
                     </td>
-                    <td className="py-2.5 text-gray-500 font-sans">{w.admin_note || '—'}</td>
+                    <td className="py-3 text-gray-400 font-sans text-xs">{w.admin_note || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -185,44 +219,50 @@ export const WalletPage: React.FC = () => {
       )}
 
       {/* Immutable Ledger Table */}
-      <div className="glass-panel p-6 rounded-3xl border border-dark-border space-y-4">
-        <h2 className="text-base font-bold text-white font-display flex items-center gap-2">
-          <FileText className="w-5 h-5 text-rage-accent" />
-          <span>Immutable Transaction Ledger</span>
-        </h2>
+      <div className="glass-panel p-6 sm:p-7 rounded-3xl border border-white/10 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-white font-display flex items-center gap-2">
+            <FileText className="w-5 h-5 text-rage-accent" />
+            <span>Immutable Double-Entry Ledger</span>
+          </h2>
+          <span className="text-xs text-gray-400 font-mono">{transactions.length} Records</span>
+        </div>
 
         {transactions.length === 0 ? (
-          <div className="py-12 text-center text-gray-500 text-xs">
+          <div className="py-14 text-center text-gray-500 text-xs">
             No ledger transactions recorded yet.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="text-gray-500 uppercase border-b border-dark-border/60">
+              <thead className="text-gray-400 uppercase text-[10px] tracking-wider border-b border-white/10">
                 <tr>
                   <th className="pb-3">Timestamp</th>
-                  <th className="pb-3">Type</th>
+                  <th className="pb-3">Entry Type</th>
                   <th className="pb-3">Description</th>
                   <th className="pb-3">Status</th>
-                  <th className="pb-3 text-right">Amount</th>
+                  <th className="pb-3 text-right">Net Credit/Debit</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark-border/40 text-gray-300">
+              <tbody className="divide-y divide-white/5 text-gray-300">
                 {transactions.map((tx) => (
-                  <tr key={tx.id} className="hover:bg-dark-surface/30">
-                    <td className="py-3 text-gray-400 font-mono">
+                  <tr key={tx.id} className="hover:bg-white/[0.02]">
+                    <td className="py-3 text-gray-400 font-mono text-[11px]">
                       {new Date(tx.created_at).toLocaleString()}
                     </td>
                     <td className="py-3">
-                      <span className="px-2 py-0.5 rounded bg-dark-card border border-dark-border text-[10px] font-mono text-gray-300">
+                      <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-[10px] font-mono font-bold text-gray-300">
                         {tx.type}
                       </span>
                     </td>
-                    <td className="py-3 max-w-sm truncate">{tx.description}</td>
+                    <td className="py-3 max-w-sm truncate text-white">{tx.description}</td>
                     <td className="py-3">
-                      <span className="text-emerald-400 font-medium text-[11px]">{tx.status}</span>
+                      <span className="text-emerald-400 font-semibold text-[11px] flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" />
+                        <span>{tx.status}</span>
+                      </span>
                     </td>
-                    <td className="py-3 text-right font-mono font-bold">
+                    <td className="py-3 text-right font-mono font-bold text-sm">
                       <span className={tx.amount >= 0 ? 'text-emerald-400' : 'text-red-400'}>
                         {tx.amount >= 0 ? `+₹${tx.amount.toFixed(2)}` : `-₹${Math.abs(tx.amount).toFixed(2)}`}
                       </span>
@@ -237,35 +277,35 @@ export const WalletPage: React.FC = () => {
 
       {/* Payout Request Modal */}
       {showWithdrawModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-dark-border">
-              <h3 className="font-display font-bold text-white text-base flex items-center gap-2">
-                <ArrowUpRight className="w-4 h-4 text-rage-accent" />
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="glass-panel border border-white/15 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 bg-dark-card relative">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
+              <h3 className="font-display font-black text-white text-lg flex items-center gap-2">
+                <ArrowUpRight className="w-5 h-5 text-rage-accent" />
                 <span>Request Payout</span>
               </h3>
               <button
                 onClick={() => setShowWithdrawModal(false)}
-                className="text-gray-400 hover:text-white"
+                className="w-8 h-8 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {modalError && (
-              <div className="p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-red-300 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0" />
+              <div className="p-3.5 rounded-2xl bg-red-950/50 border border-red-500/40 text-red-300 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
                 <span>{modalError}</span>
               </div>
             )}
 
             <form onSubmit={handleRequestWithdrawal} className="space-y-4">
               <div>
-                <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
-                  Amount in INR (Min. ₹100)
+                <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
+                  Amount (INR ₹) &bull; Min. ₹100
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 font-bold font-mono">₹</span>
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold font-mono">₹</span>
                   <input
                     type="number"
                     min="100"
@@ -273,43 +313,49 @@ export const WalletPage: React.FC = () => {
                     required
                     value={withdrawAmount}
                     onChange={(e) => setWithdrawAmount(Number(e.target.value))}
-                    className="w-full pl-8 pr-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-white text-sm font-mono font-bold focus:outline-none focus:border-rage-accent"
+                    className="w-full pl-9 pr-4 py-2.5 bg-black/50 border border-white/15 rounded-xl text-white text-base font-mono font-bold focus:outline-none focus:border-rage-accent"
                   />
                 </div>
-                <div className="text-[10px] text-gray-500 mt-1">
-                  Available: ₹{wallet?.available_balance.toFixed(2) || '0.00'}
+                <div className="text-[11px] text-gray-400 mt-1.5 font-mono">
+                  Available Balance: <strong className="text-emerald-400">₹{wallet?.available_balance.toFixed(2) || '0.00'}</strong>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                   Payout Method
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2.5">
                   <button
                     type="button"
                     onClick={() => setPayoutMethod('UPI')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors ${
-                      payoutMethod === 'UPI' ? 'border-rage-accent bg-rage-accent/10 text-white' : 'border-dark-border text-gray-400'
+                    className={`py-3 px-3 rounded-2xl text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
+                      payoutMethod === 'UPI'
+                        ? 'border-rage-accent bg-rage-accent/15 text-white shadow-rage-glow-sm'
+                        : 'border-white/10 bg-white/[0.02] text-gray-400 hover:text-white'
                     }`}
                   >
-                    UPI Transfer
+                    <QrCode className="w-4 h-4" />
+                    <span>UPI Transfer</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPayoutMethod('BANK_TRANSFER')}
-                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-colors ${
-                      payoutMethod === 'BANK_TRANSFER' ? 'border-rage-accent bg-rage-accent/10 text-white' : 'border-dark-border text-gray-400'
+                    className={`py-3 px-3 rounded-2xl text-xs font-bold border transition-all flex items-center justify-center gap-2 ${
+                      payoutMethod === 'BANK_TRANSFER'
+                        ? 'border-rage-accent bg-rage-accent/15 text-white shadow-rage-glow-sm'
+                        : 'border-white/10 bg-white/[0.02] text-gray-400 hover:text-white'
                     }`}
                   >
-                    Bank NEFT / IMPS
+                    <Building className="w-4 h-4" />
+                    <span>Bank IMPS</span>
                   </button>
                 </div>
               </div>
 
               {payoutMethod === 'UPI' ? (
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1.5">
                     UPI Virtual Payment Address (VPA)
                   </label>
                   <input
@@ -318,13 +364,13 @@ export const WalletPage: React.FC = () => {
                     placeholder="creator@okhdfcbank"
                     value={upiId}
                     onChange={(e) => setUpiId(e.target.value)}
-                    className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono"
+                    className="w-full px-4 py-2.5 bg-black/50 border border-white/15 rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono"
                   />
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1">
                       Account Beneficiary Name
                     </label>
                     <input
@@ -333,11 +379,11 @@ export const WalletPage: React.FC = () => {
                       placeholder="Account Holder Full Name"
                       value={bankHolder}
                       onChange={(e) => setBankHolder(e.target.value)}
-                      className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent"
+                      className="w-full px-4 py-2.5 bg-black/50 border border-white/15 rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1">
                       Bank Account Number
                     </label>
                     <input
@@ -346,11 +392,11 @@ export const WalletPage: React.FC = () => {
                       placeholder="01234567890"
                       value={bankAccount}
                       onChange={(e) => setBankAccount(e.target.value)}
-                      className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono"
+                      className="w-full px-4 py-2.5 bg-black/50 border border-white/15 rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-bold text-gray-300 uppercase tracking-wider mb-1">
                       IFSC Code
                     </label>
                     <input
@@ -359,26 +405,26 @@ export const WalletPage: React.FC = () => {
                       placeholder="HDFC0001234"
                       value={bankIfsc}
                       onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
-                      className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono uppercase"
+                      className="w-full px-4 py-2.5 bg-black/50 border border-white/15 rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono uppercase"
                     />
                   </div>
                 </div>
               )}
 
-              <div className="pt-2 flex justify-end gap-2">
+              <div className="pt-2 flex justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowWithdrawModal(false)}
-                  className="px-4 py-2 bg-dark-bg border border-dark-border text-gray-300 text-xs rounded-xl"
+                  className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 text-xs font-semibold rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={withdrawLoading}
-                  className="px-5 py-2 bg-rage-accent hover:bg-rage-600 text-white text-xs font-bold rounded-xl shadow-rage-glow-sm"
+                  className="px-6 py-2.5 bg-rage-accent hover:bg-rage-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-rage-glow-sm transition-all"
                 >
-                  {withdrawLoading ? 'Submitting...' : 'Confirm Request'}
+                  {withdrawLoading ? 'Authorizing...' : 'Authorize Payout'}
                 </button>
               </div>
             </form>

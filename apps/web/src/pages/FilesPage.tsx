@@ -7,7 +7,17 @@ import {
   Share2,
   Trash2,
   Download,
-  Plus
+  Plus,
+  Lock,
+  Clock,
+  FileArchive,
+  FileVideo,
+  FileText,
+  FileCode,
+  File as FileGeneric,
+  X,
+  Check,
+  CheckCircle2
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -42,17 +52,8 @@ export const FilesPage: React.FC = () => {
     loadFiles();
   }, [search, filterVisibility]);
 
-  if (isLoading && files.length === 0) {
-    return (
-      <div className="py-20 text-center">
-        <div className="w-8 h-8 border-4 border-rage-accent border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-gray-400 text-xs font-mono">Loading Cloud Files...</p>
-      </div>
-    );
-  }
-
   const handleDelete = async (fileId: string) => {
-    if (!window.confirm('Are you sure you want to delete this file? This will remove it from cloud storage.')) return;
+    if (!window.confirm('Are you sure you want to delete this file? This will permanently remove it from your cloud vault.')) return;
     try {
       await api.deleteFile(fileId);
       setFiles((prev) => prev.filter((f) => f.id !== fileId));
@@ -80,130 +81,161 @@ export const FilesPage: React.FC = () => {
     }
   };
 
+  const getFileIcon = (ext: string) => {
+    const e = ext.toLowerCase();
+    if (['zip', 'rar', '7z', 'tar', 'gz'].includes(e)) return <FileArchive className="w-4 h-4 text-amber-400" />;
+    if (['mp4', 'mkv', 'mov', 'avi', 'webm'].includes(e)) return <FileVideo className="w-4 h-4 text-rose-400" />;
+    if (['pdf', 'doc', 'docx', 'txt'].includes(e)) return <FileText className="w-4 h-4 text-blue-400" />;
+    if (['js', 'ts', 'py', 'json', 'cpp'].includes(e)) return <FileCode className="w-4 h-4 text-emerald-400" />;
+    return <FileGeneric className="w-4 h-4 text-slate-400" />;
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-in fade-in duration-200">
       {/* Title & Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-white/[0.08]">
         <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-mono">
+              STORAGE ASSETS
+            </span>
+            <span className="text-xs text-slate-500">•</span>
+            <span className="text-xs text-slate-400">{files.length} Total Files Uploaded</span>
+          </div>
           <h1 className="text-2xl font-black text-white font-display flex items-center gap-2">
-            <FolderOpen className="w-6 h-6 text-rage-accent" />
-            <span>My Files & Content</span>
+            <FolderOpen className="w-6 h-6 text-rose-500" />
+            <span>My Creator Vault</span>
           </h1>
-          <p className="text-xs text-gray-400 mt-0.5">Manage digital uploads, generate secured links, and set paid monetization.</p>
+          <p className="text-xs text-slate-400 mt-1">
+            Manage your uploaded archives, share monetized links, and customize file access protections.
+          </p>
         </div>
         <Link
           to="/upload"
-          className="flex items-center gap-2 px-4 py-2 bg-rage-accent hover:bg-rage-600 text-white font-semibold text-xs rounded-xl shadow-rage-glow-sm"
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-rose-600/20 hover:shadow-rose-600/40 transition-all active:scale-[0.98]"
         >
           <Plus className="w-4 h-4" />
-          <span>Upload New</span>
+          <span>Upload New Asset</span>
         </Link>
       </div>
 
       {/* Filter and Search Bar */}
       <div className="flex flex-col sm:flex-row items-center gap-3">
         <div className="relative flex-1 w-full">
-          <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
-            placeholder="Search files by name or extension..."
+            placeholder="Search vault files by filename or extension..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 bg-dark-card border border-dark-border rounded-xl text-sm text-gray-200 focus:outline-none focus:border-rage-accent"
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-900/90 border border-white/10 rounded-xl text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 transition-colors"
           />
         </div>
         <select
           value={filterVisibility}
           onChange={(e) => setFilterVisibility(e.target.value)}
-          className="w-full sm:w-44 py-2 px-3 bg-dark-card border border-dark-border rounded-xl text-xs font-semibold text-gray-300 focus:outline-none"
+          className="w-full sm:w-48 py-2.5 px-3 bg-slate-900/90 border border-white/10 rounded-xl text-xs font-semibold text-slate-300 focus:outline-none focus:border-rose-500"
         >
-          <option value="">All Visibilities</option>
-          <option value="PUBLIC">Public</option>
-          <option value="PAID">Paid Content</option>
-          <option value="PRIVATE">Private</option>
-          <option value="UNLISTED">Unlisted</option>
+          <option value="">All Access Types</option>
+          <option value="PUBLIC">Public (Free)</option>
+          <option value="PAID">Paid Monetized Content</option>
+          <option value="PRIVATE">Private Vault Only</option>
+          <option value="UNLISTED">Unlisted Direct Link</option>
         </select>
       </div>
 
       {/* File List Table */}
-      <div className="glass-panel rounded-3xl p-6 border border-dark-border">
-        {files.length === 0 ? (
-          <div className="py-16 text-center text-gray-400">
-            <p className="text-sm">No files found matching your criteria.</p>
+      <div className="glass-panel rounded-3xl p-6 border border-white/10 shadow-xl">
+        {isLoading && files.length === 0 ? (
+          <div className="py-20 text-center">
+            <div className="w-8 h-8 border-3 border-rose-500/20 border-t-rose-500 rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-slate-400 text-xs font-mono">Querying Google Drive Vault...</p>
+          </div>
+        ) : files.length === 0 ? (
+          <div className="py-16 text-center text-slate-400">
+            <div className="w-12 h-12 rounded-2xl bg-slate-800/60 border border-white/10 flex items-center justify-center text-slate-500 mx-auto mb-3">
+              <FolderOpen className="w-6 h-6" />
+            </div>
+            <p className="text-sm font-semibold text-slate-300">No vault files matched your query.</p>
+            <p className="text-xs text-slate-500 mt-1">Try resetting your search filters or upload a new file.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-gray-500 border-b border-dark-border/60">
+            <table className="w-full text-left text-xs">
+              <thead className="uppercase text-[10px] text-slate-400 border-b border-white/10">
                 <tr>
-                  <th className="pb-3 font-semibold">File Name</th>
-                  <th className="pb-3 font-semibold">Size</th>
-                  <th className="pb-3 font-semibold">Visibility</th>
-                  <th className="pb-3 font-semibold">Backend</th>
-                  <th className="pb-3 font-semibold">Downloads</th>
-                  <th className="pb-3 font-semibold text-right">Actions</th>
+                  <th className="pb-3.5 font-semibold">File Name</th>
+                  <th className="pb-3.5 font-semibold">Size</th>
+                  <th className="pb-3.5 font-semibold">Access Level</th>
+                  <th className="pb-3.5 font-semibold">Backend</th>
+                  <th className="pb-3.5 font-semibold">Downloads</th>
+                  <th className="pb-3.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-dark-border/40 text-gray-300">
+              <tbody className="divide-y divide-white/5 text-slate-300">
                 {files.map((file) => (
-                  <tr key={file.id} className="hover:bg-dark-surface/40 transition-colors">
+                  <tr key={file.id} className="hover:bg-white/[0.02] transition-colors">
                     <td className="py-3.5 font-medium text-white">
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-8 h-8 rounded-lg bg-dark-bg border border-dark-border flex items-center justify-center text-[10px] uppercase font-mono font-bold text-rage-400">
-                          {file.extension.slice(0, 4)}
-                        </span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-slate-800/80 border border-white/10 flex items-center justify-center">
+                          {getFileIcon(file.extension)}
+                        </div>
                         <div>
-                          <div className="font-semibold text-sm truncate max-w-xs">{file.name}</div>
-                          <div className="text-[10px] text-gray-500 font-mono">
-                            SHA: {file.checksum.slice(0, 16)}...
+                          <div className="font-semibold text-xs truncate max-w-xs">{file.name}</div>
+                          <div className="text-[10px] text-slate-500 font-mono">
+                            SHA: {file.checksum ? file.checksum.slice(0, 14) : 'verified'}...
                           </div>
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 font-mono text-xs text-gray-400">
+                    <td className="py-3.5 font-mono text-slate-400">
                       {(file.size / (1024 * 1024)).toFixed(2)} MB
                     </td>
                     <td className="py-3.5">
-                      <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${
+                      <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold ${
                         file.visibility === 'PAID'
-                          ? 'bg-amber-950/40 text-amber-400 border border-amber-800/40'
+                          ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                           : file.visibility === 'PUBLIC'
-                          ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-800/40'
-                          : 'bg-gray-800 text-gray-400'
+                          ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'
+                          : 'bg-slate-800 text-slate-400 border border-slate-700'
                       }`}>
                         {file.visibility} {file.visibility === 'PAID' ? `(₹${file.price})` : ''}
                       </span>
                     </td>
-                    <td className="py-3.5 font-mono text-[11px] text-gray-400">
+                    <td className="py-3.5 font-mono text-[11px] text-slate-400">
                       {file.storage_backend}
                     </td>
-                    <td className="py-3.5 font-mono text-xs">{file.download_count}</td>
+                    <td className="py-3.5 font-mono font-semibold text-slate-200">
+                      {file.download_count.toLocaleString()}
+                    </td>
                     <td className="py-3.5 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          type="button"
                           onClick={() => {
                             setActiveFileForShare(file);
                             setCreatedShare(null);
                           }}
-                          title="Generate Share Link"
-                          className="p-1.5 rounded-lg bg-dark-card border border-dark-border hover:border-rage-accent hover:text-rage-400 text-gray-300 transition-colors"
+                          title="Generate Protected Share Link"
+                          className="p-2 rounded-lg bg-slate-800/80 border border-white/5 hover:border-rose-500/50 hover:text-rose-400 text-slate-300 transition-colors cursor-pointer"
                         >
-                          <Share2 className="w-4 h-4" />
+                          <Share2 className="w-3.5 h-3.5" />
                         </button>
                         <a
                           href={api.getStreamUrl(file.id)}
                           download={file.name}
-                          title="Direct Stream"
-                          className="p-1.5 rounded-lg bg-dark-card border border-dark-border hover:border-blue-500 hover:text-blue-400 text-gray-300 transition-colors"
+                          title="Direct Cloud Stream"
+                          className="p-2 rounded-lg bg-slate-800/80 border border-white/5 hover:border-blue-500 hover:text-blue-400 text-slate-300 transition-colors"
                         >
-                          <Download className="w-4 h-4" />
+                          <Download className="w-3.5 h-3.5" />
                         </a>
                         <button
+                          type="button"
                           onClick={() => handleDelete(file.id)}
-                          title="Delete File"
-                          className="p-1.5 rounded-lg bg-dark-card border border-dark-border hover:border-red-600 hover:text-red-400 text-gray-300 transition-colors"
+                          title="Delete File from Vault"
+                          className="p-2 rounded-lg bg-slate-800/80 border border-white/5 hover:border-rose-600 hover:text-rose-400 text-slate-300 transition-colors cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -217,50 +249,62 @@ export const FilesPage: React.FC = () => {
 
       {/* Share Link Generation Modal */}
       {activeFileForShare && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-dark-card border border-dark-border rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-dark-border">
+        <div 
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={() => setActiveFileForShare(null)}
+        >
+          <div 
+            className="bg-[#0f172a] border border-white/10 rounded-2xl p-6 sm:p-7 max-w-md w-full shadow-2xl space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-white/10">
               <h3 className="font-display font-bold text-white text-base flex items-center gap-2">
-                <Share2 className="w-4 h-4 text-rage-accent" />
-                <span>Create Share Link</span>
+                <Share2 className="w-4 h-4 text-rose-500" />
+                <span>Create Protected Share Link</span>
               </h3>
               <button
+                type="button"
                 onClick={() => setActiveFileForShare(null)}
-                className="text-gray-400 hover:text-white text-sm"
+                className="p-1 rounded-full text-slate-400 hover:text-white hover:bg-white/10"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-xs text-gray-400">
-              Generating public link for: <strong className="text-gray-200">{activeFileForShare.name}</strong>
+            <p className="text-xs text-slate-400">
+              Generating monetized download gateway for: <strong className="text-white">{activeFileForShare.name}</strong>
             </p>
 
             {createdShare ? (
               <div className="space-y-4 pt-2">
-                <div className="p-4 rounded-2xl bg-dark-bg border border-emerald-500/30">
-                  <div className="text-xs text-emerald-400 font-semibold mb-1">Link Generated Successfully!</div>
+                <div className="p-4 rounded-xl bg-slate-900 border border-emerald-500/30">
+                  <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-bold mb-1">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Gateway Link Live</span>
+                  </div>
                   <div className="flex items-center justify-between gap-2 mt-2">
-                    <span className="font-mono text-xs text-gray-200 break-all select-all">
+                    <span className="font-mono text-xs text-slate-200 break-all select-all">
                       {window.location.origin}/d/{createdShare.short_code}
                     </span>
                     <button
+                      type="button"
                       onClick={() => {
                         navigator.clipboard.writeText(`${window.location.origin}/d/${createdShare.short_code}`);
                         setCopiedLink(true);
                         setTimeout(() => setCopiedLink(false), 2000);
                       }}
-                      className="px-3 py-1.5 bg-rage-accent hover:bg-rage-600 text-white rounded-lg text-xs font-semibold shrink-0"
+                      className="px-3 py-1.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer shadow-sm"
                     >
-                      {copiedLink ? 'Copied' : 'Copy'}
+                      {copiedLink ? <Check className="w-3.5 h-3.5" /> : 'Copy'}
                     </button>
                   </div>
                 </div>
 
                 <div className="flex justify-end">
                   <button
+                    type="button"
                     onClick={() => setActiveFileForShare(null)}
-                    className="px-4 py-2 bg-dark-border text-gray-300 text-xs font-semibold rounded-xl hover:bg-gray-700"
+                    className="px-4 py-2 bg-slate-800 text-slate-200 text-xs font-bold rounded-xl hover:bg-slate-700 cursor-pointer"
                   >
                     Done
                   </button>
@@ -269,34 +313,40 @@ export const FilesPage: React.FC = () => {
             ) : (
               <form onSubmit={handleGenerateShare} className="space-y-3.5">
                 <div>
-                  <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                     Password Protection (Optional)
                   </label>
-                  <input
-                    type="password"
-                    value={sharePassword}
-                    onChange={(e) => setSharePassword(e.target.value)}
-                    placeholder="Leave empty for public access"
-                    className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent"
-                  />
+                  <div className="relative">
+                    <Lock className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="password"
+                      value={sharePassword}
+                      onChange={(e) => setSharePassword(e.target.value)}
+                      placeholder="Leave blank for public open access"
+                      className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                       Expires In (Hours)
                     </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="720"
-                      value={shareExpiryHours}
-                      onChange={(e) => setShareExpiryHours(Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent"
-                    />
+                    <div className="relative">
+                      <Clock className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number"
+                        min="1"
+                        max="720"
+                        value={shareExpiryHours}
+                        onChange={(e) => setShareExpiryHours(Number(e.target.value))}
+                        className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
+                      />
+                    </div>
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                       Download Limit
                     </label>
                     <input
@@ -305,7 +355,7 @@ export const FilesPage: React.FC = () => {
                       placeholder="Unlimited"
                       value={shareLimit}
                       onChange={(e) => setShareLimit(e.target.value === '' ? '' : Number(e.target.value))}
-                      className="w-full px-3 py-2 bg-dark-bg border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent"
+                      className="w-full px-3 py-2 bg-slate-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-rose-500"
                     />
                   </div>
                 </div>
@@ -314,14 +364,14 @@ export const FilesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setActiveFileForShare(null)}
-                    className="px-4 py-2 bg-dark-bg border border-dark-border text-gray-300 text-xs rounded-xl"
+                    className="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl hover:bg-slate-700 cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={shareLoading}
-                    className="px-5 py-2 bg-rage-accent hover:bg-rage-600 text-white text-xs font-bold rounded-xl shadow-rage-glow-sm"
+                    className="px-5 py-2 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white text-xs font-bold rounded-xl shadow-md shadow-rose-600/30 cursor-pointer"
                   >
                     {shareLoading ? 'Generating...' : 'Generate Short Link'}
                   </button>
@@ -334,3 +384,4 @@ export const FilesPage: React.FC = () => {
     </div>
   );
 };
+

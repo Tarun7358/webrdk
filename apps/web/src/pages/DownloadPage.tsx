@@ -11,19 +11,28 @@ import {
   DollarSign,
   AlertCircle,
   CheckCircle,
-  Clock
+  Clock,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Zap,
+  Server,
+  Share2,
+  Check
 } from 'lucide-react';
 
 export const DownloadPage: React.FC = () => {
   const { shortCode } = useParams<{ shortCode: string }>();
   const [data, setData] = useState<PublicDownloadPageData | null>(null);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [countdown, setCountdown] = useState<number>(3);
   const [readyToDownload, setReadyToDownload] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [videoSeconds, setVideoSeconds] = useState(0);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -64,7 +73,6 @@ export const DownloadPage: React.FC = () => {
           setVideoSeconds((prev) => {
             const next = prev + 1;
             if (next === 10) {
-              // Trigger qualified video view milestone
               api.trackVideo({
                 file_id: data.file_id,
                 watch_seconds: 10,
@@ -87,7 +95,7 @@ export const DownloadPage: React.FC = () => {
       setIsUnlocked(true);
       setError(null);
     } catch (err: any) {
-      setError(err.message || 'Incorrect password');
+      setError(err.message || 'Incorrect decryption key');
     }
   };
 
@@ -95,19 +103,28 @@ export const DownloadPage: React.FC = () => {
     if (!data) return;
     try {
       await api.purchaseContent(data.file_id);
-      alert('Purchase simulated successfully! You now have permanent access.');
+      alert('Payment confirmed! Content unlocked for download.');
       window.location.reload();
     } catch (err: any) {
       alert(`Purchase failed: ${err.message}`);
     }
   };
 
+  const copyCurrentPageLink = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-4 border-rage-accent border-t-transparent rounded-full animate-spin" />
-          <p className="text-gray-400 font-mono text-xs">Locating File & Verifying Storage Node...</p>
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
+        <div className="glass-panel p-8 rounded-3xl border border-white/10 text-center space-y-4 max-w-sm w-full">
+          <div className="w-12 h-12 border-3 border-rage-accent border-t-transparent rounded-full animate-spin mx-auto" />
+          <div>
+            <h3 className="font-display font-bold text-white text-base">Locating Storage Node</h3>
+            <p className="text-gray-400 font-mono text-xs mt-1">Verifying Google Drive checksum & routing edge CDN...</p>
+          </div>
         </div>
       </div>
     );
@@ -116,14 +133,21 @@ export const DownloadPage: React.FC = () => {
   if (error || !data) {
     return (
       <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4">
-        <div className="glass-panel p-8 rounded-3xl max-w-md w-full text-center space-y-4 border border-dark-border">
-          <div className="w-12 h-12 rounded-2xl bg-red-950/40 border border-red-800/40 text-red-400 flex items-center justify-center mx-auto">
-            <AlertCircle className="w-6 h-6" />
+        <div className="glass-panel p-8 sm:p-10 rounded-3xl max-w-md w-full text-center space-y-5 border border-white/10 shadow-2xl">
+          <div className="w-14 h-14 rounded-2xl bg-red-950/60 border border-red-500/40 text-red-400 flex items-center justify-center mx-auto shadow-lg">
+            <AlertCircle className="w-7 h-7" />
           </div>
-          <h2 className="text-xl font-bold text-white">File Unavailable</h2>
-          <p className="text-xs text-gray-400">{error || 'This link may have expired or reached its maximum download limit.'}</p>
-          <Link to="/" className="inline-block px-5 py-2.5 bg-rage-accent text-white font-semibold text-xs rounded-xl shadow-rage-glow-sm">
-            Back to RAGE Cloud
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-bold text-white font-display">Download Unavailable</h2>
+            <p className="text-xs text-gray-400 leading-relaxed">
+              {error || 'This link may have been modified, expired, or removed by its creator.'}
+            </p>
+          </div>
+          <Link
+            to="/"
+            className="inline-flex items-center gap-2 px-6 py-3 bg-rage-accent hover:bg-rage-600 text-white font-bold text-xs rounded-xl shadow-rage-glow-sm transition-all"
+          >
+            <span>Return to RAGE Cloud</span>
           </Link>
         </div>
       </div>
@@ -133,70 +157,92 @@ export const DownloadPage: React.FC = () => {
   const downloadUrl = api.getDownloadUrl(shortCode, password);
 
   return (
-    <div className="min-h-screen bg-dark-bg text-gray-100 flex flex-col justify-between">
-      {/* Top Brand Bar */}
-      <header className="border-b border-dark-border/60 bg-dark-surface/40 backdrop-blur-md px-6 py-4 flex items-center justify-between">
-        <Link to="/" className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-rage-accent to-red-800 flex items-center justify-center shadow-rage-glow-sm">
+    <div className="min-h-screen bg-dark-bg text-gray-100 flex flex-col justify-between selection:bg-rage-accent selection:text-white">
+      {/* Top Header */}
+      <header className="border-b border-white/5 bg-black/40 backdrop-blur-xl px-6 py-4 flex items-center justify-between sticky top-0 z-40">
+        <Link to="/" className="flex items-center gap-3 group">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-rage-accent to-red-800 flex items-center justify-center shadow-rage-glow-sm group-hover:scale-105 transition-transform">
             <Flame className="w-5 h-5 text-white" />
           </div>
-          <span className="font-display font-extrabold text-base tracking-wider text-white">
-            RAGE <span className="text-rage-accent">CLOUD</span>
-          </span>
+          <div className="flex flex-col">
+            <span className="font-display font-black text-sm tracking-wider text-white">
+              RAGE <span className="text-rage-accent">CLOUD</span>
+            </span>
+            <span className="text-[10px] text-gray-400 font-mono">Edge CDN Portal</span>
+          </div>
         </Link>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <ShieldCheck className="w-4 h-4 text-emerald-400" />
-          <span className="hidden sm:inline">SHA-256 Checksum Verified</span>
+
+        <div className="flex items-center gap-3">
+          <button
+            onClick={copyCurrentPageLink}
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-gray-300 font-medium transition-colors"
+          >
+            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+            <span>{copiedLink ? 'Link Copied' : 'Share File'}</span>
+          </button>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+            <ShieldCheck className="w-4 h-4 shrink-0" />
+            <span className="hidden sm:inline">SHA-256 Verified</span>
+          </div>
         </div>
       </header>
 
       {/* Main Download Container */}
-      <main className="max-w-4xl mx-auto px-4 py-8 w-full space-y-6">
-        {/* Top Ad Banner Placement */}
-        <div className="glass-panel p-3 sm:p-4 rounded-2xl border border-dashed border-rage-700/30 bg-gradient-to-r from-red-950/20 to-dark-surface flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-rage-accent/20 border border-rage-accent/30 flex items-center justify-center text-rage-accent font-bold text-xs uppercase shrink-0">
-              AD
+      <main className="max-w-4xl mx-auto px-4 py-8 sm:py-12 w-full space-y-6">
+        {/* Ad / Sponsor Banner */}
+        <div className="glass-panel p-4 sm:p-5 rounded-3xl border border-white/10 bg-gradient-to-r from-red-950/30 via-black/40 to-dark-card flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 relative overflow-hidden">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-rage-accent/20 border border-rage-accent/30 flex items-center justify-center text-rage-accent font-black text-xs uppercase shrink-0">
+              <Zap className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-xs font-bold text-white">RAGE Elite Gaming VPS & Dedicated Game Servers</div>
-              <div className="text-[11px] text-gray-400">Ultra low ping with anti-DDoS protection starting at ₹499/mo</div>
+              <div className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                <span>RAGE Ultra Low-Ping Game & Bot Servers</span>
+                <span className="px-1.5 py-0.5 rounded bg-rage-accent text-white text-[9px] uppercase font-mono font-bold">SPONSORED</span>
+              </div>
+              <div className="text-[11px] text-gray-400 mt-0.5">
+                Multi-threaded NVMe storage with automated Anti-DDoS mitigation starting at ₹499/mo.
+              </div>
             </div>
           </div>
           <a
             href="https://ragecloud.io/partner"
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3.5 py-1.5 bg-rage-accent hover:bg-rage-600 text-white text-xs font-semibold rounded-lg shrink-0"
+            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/15 text-white text-xs font-bold rounded-xl shrink-0 transition-colors"
           >
-            Explore
+            Explore Node
           </a>
         </div>
 
         {/* Central File Showcase Card */}
-        <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-dark-border shadow-2xl space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-dark-border/60">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-dark-bg border border-dark-border flex items-center justify-center text-rage-accent shadow-inner">
-                <File className="w-7 h-7" />
+        <div className="glass-panel p-6 sm:p-10 rounded-3xl border border-white/10 shadow-2xl space-y-8 relative overflow-hidden">
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 right-1/4 w-96 h-96 bg-rage-accent/5 rounded-full blur-3xl pointer-events-none" />
+
+          {/* File Meta Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-white/10">
+            <div className="flex items-start sm:items-center gap-4">
+              <div className="w-16 h-16 rounded-3xl bg-black/60 border border-white/10 flex items-center justify-center text-rage-accent shadow-inner shrink-0 ring-4 ring-white/5">
+                <File className="w-8 h-8" />
               </div>
               <div>
-                <h1 className="text-xl sm:text-2xl font-black text-white font-display break-all">
+                <h1 className="text-xl sm:text-2xl font-black text-white font-display break-all leading-tight">
                   {data.file_name}
                 </h1>
-                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400 mt-1">
-                  <span>{(data.size / (1024 * 1024)).toFixed(2)} MB</span>
+                <div className="flex flex-wrap items-center gap-3 text-xs text-gray-400 mt-2">
+                  <span className="font-mono text-gray-300 font-bold">{(data.size / (1024 * 1024)).toFixed(2)} MB</span>
                   <span>•</span>
-                  <span>Uploaded by <strong className="text-gray-200">{data.creator_name}</strong></span>
+                  <span>Creator: <strong className="text-white">{data.creator_name}</strong></span>
                   <span>•</span>
-                  <span>{data.download_count} total downloads</span>
+                  <span className="font-mono">{data.download_count.toLocaleString()} downloads</span>
                 </div>
               </div>
             </div>
 
             {data.is_paid && (
-              <div className="px-4 py-2 rounded-xl bg-amber-950/40 border border-amber-800/40 text-amber-400 font-bold text-sm flex items-center gap-1.5 shrink-0">
-                <DollarSign className="w-4 h-4" />
+              <div className="px-5 py-2.5 rounded-2xl bg-amber-950/40 border border-amber-500/40 text-amber-400 font-mono font-bold text-base flex items-center gap-2 shrink-0">
+                <DollarSign className="w-5 h-5" />
                 <span>₹{data.price} INR</span>
               </div>
             )}
@@ -204,49 +250,68 @@ export const DownloadPage: React.FC = () => {
 
           {/* Password Protection Barrier */}
           {!isUnlocked && data.is_password_protected ? (
-            <form onSubmit={handlePasswordUnlock} className="p-6 rounded-2xl bg-dark-bg/80 border border-dark-border space-y-3">
-              <div className="flex items-center gap-2 text-rage-400 text-xs font-semibold uppercase tracking-wider">
-                <Lock className="w-4 h-4" />
-                <span>Password Protected File</span>
+            <form onSubmit={handlePasswordUnlock} className="p-6 sm:p-8 rounded-3xl bg-black/60 border border-white/10 space-y-4 max-w-lg mx-auto">
+              <div className="w-12 h-12 rounded-2xl bg-rage-accent/15 border border-rage-accent/30 text-rage-accent flex items-center justify-center mx-auto">
+                <Lock className="w-6 h-6" />
               </div>
-              <p className="text-xs text-gray-400">The creator has protected this file with a password. Enter it below to unlock.</p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  required
-                  placeholder="Enter access password..."
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="flex-1 px-4 py-2 bg-dark-card border border-dark-border rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent"
-                />
+              <div className="text-center space-y-1">
+                <h3 className="font-display font-bold text-white text-base">Decryption Passphrase Required</h3>
+                <p className="text-xs text-gray-400">
+                  The creator has locked this distribution with an end-to-end passphrase.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    placeholder="Enter decryption password..."
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-4 pr-10 py-3 bg-white/5 border border-white/15 rounded-xl text-xs text-white focus:outline-none focus:border-rage-accent font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-rage-accent hover:bg-rage-600 text-white font-bold text-xs rounded-xl"
+                  className="w-full py-3 bg-rage-accent hover:bg-rage-600 text-white font-bold text-xs rounded-xl shadow-rage-glow-sm transition-all"
                 >
-                  Unlock File
+                  Decrypt & Unlock Download
                 </button>
               </div>
             </form>
           ) : data.is_paid ? (
             /* Paid Content Barrier */
-            <div className="p-6 rounded-2xl bg-amber-950/20 border border-amber-800/30 text-center space-y-4">
-              <h3 className="text-base font-bold text-white">Creator Paid Asset</h3>
-              <p className="text-xs text-gray-400 max-w-md mx-auto">
-                This item is priced at ₹{data.price}. Purchase access directly to support {data.creator_name} and download immediately.
-              </p>
+            <div className="p-8 rounded-3xl bg-amber-950/20 border border-amber-500/30 text-center space-y-4 max-w-lg mx-auto">
+              <div className="w-14 h-14 rounded-2xl bg-amber-950/60 border border-amber-500/40 text-amber-400 flex items-center justify-center mx-auto">
+                <DollarSign className="w-7 h-7" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white font-display">Creator Premium Asset</h3>
+                <p className="text-xs text-gray-400">
+                  This download is priced at <strong className="text-amber-400 font-mono">₹{data.price} INR</strong>. Unlock instant high-speed access while directly supporting {data.creator_name}.
+                </p>
+              </div>
               <button
                 onClick={handlePaidPurchase}
-                className="px-6 py-3 bg-rage-accent hover:bg-rage-600 text-white font-bold text-xs rounded-xl shadow-rage-glow-sm"
+                className="w-full sm:w-auto px-8 py-3.5 bg-rage-accent hover:bg-rage-600 text-white font-extrabold text-xs rounded-xl shadow-rage-glow transition-all"
               >
                 Purchase Access for ₹{data.price}
               </button>
             </div>
           ) : (
-            /* File is ready / Video player / Download action */
-            <div className="space-y-6">
+            /* File Unlocked / Video preview / Download trigger */
+            <div className="space-y-8">
               {data.is_video && (
-                <div className="space-y-2">
-                  <div className="rounded-2xl overflow-hidden bg-black border border-dark-border aspect-video relative flex items-center justify-center">
+                <div className="space-y-2.5">
+                  <div className="rounded-3xl overflow-hidden bg-black border border-white/10 aspect-video relative flex items-center justify-center shadow-2xl">
                     <video
                       ref={videoRef}
                       controls
@@ -254,60 +319,87 @@ export const DownloadPage: React.FC = () => {
                       className="w-full h-full object-contain"
                     />
                   </div>
-                  <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono">
-                    <span>Watched: {videoSeconds}s</span>
-                    <span className={videoSeconds >= 10 ? 'text-emerald-400 font-bold' : 'text-rage-400'}>
-                      {videoSeconds >= 10 ? '✓ Qualified View Verified' : 'Watch 10s to qualify creator revenue'}
+                  <div className="flex items-center justify-between text-xs font-mono text-gray-400 px-2">
+                    <span>Watch Progress: {videoSeconds}s</span>
+                    <span className={videoSeconds >= 10 ? 'text-emerald-400 font-bold flex items-center gap-1' : 'text-rage-400'}>
+                      {videoSeconds >= 10 ? (
+                        <>
+                          <CheckCircle className="w-3.5 h-3.5" />
+                          <span>Qualified Creator View Active</span>
+                        </>
+                      ) : (
+                        'Watch 10s to support creator revenue'
+                      )}
                     </span>
                   </div>
                 </div>
               )}
 
               {/* Countdown & Download Trigger */}
-              <div className="text-center py-4 space-y-4">
+              <div className="text-center py-6 space-y-5">
                 {!readyToDownload ? (
-                  <div className="inline-flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-dark-bg border border-dark-border text-xs text-gray-400 font-mono">
-                    <Clock className="w-4 h-4 text-rage-accent animate-pulse" />
-                    <span>Preparing download stream in {countdown}s...</span>
+                  <div className="space-y-4 max-w-sm mx-auto">
+                    <div className="inline-flex items-center gap-2.5 px-6 py-3 rounded-2xl bg-black/60 border border-white/15 text-xs text-gray-300 font-mono shadow-inner">
+                      <Clock className="w-4 h-4 text-rage-accent animate-spin" />
+                      <span>Allocating secure download thread ({countdown}s)...</span>
+                    </div>
+                    {/* Animated Progress Mini Bar */}
+                    <div className="w-48 mx-auto bg-white/5 rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="bg-rage-accent h-full transition-all duration-1000 ease-linear"
+                        style={{ width: `${((3 - countdown) / 3) * 100}%` }}
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <a
-                    href={downloadUrl}
-                    download={data.file_name}
-                    className="inline-flex items-center gap-3 px-8 py-4 bg-rage-accent hover:bg-rage-600 text-white font-black text-sm rounded-2xl transition-all shadow-rage-glow hover:scale-105"
-                  >
-                    <Download className="w-5 h-5" />
-                    <span>DOWNLOAD FILE NOW</span>
-                  </a>
+                  <div className="space-y-3">
+                    <a
+                      href={downloadUrl}
+                      download={data.file_name}
+                      className="inline-flex items-center gap-3 px-10 py-5 bg-rage-accent hover:bg-rage-600 text-white font-black text-base rounded-2xl transition-all shadow-rage-glow hover:scale-105 active:scale-95 uppercase tracking-wider"
+                    >
+                      <Download className="w-6 h-6 animate-bounce" />
+                      <span>Download File Now</span>
+                    </a>
+                    <div className="text-xs text-gray-500 font-mono">
+                      Direct Google Drive edge pipe • Uncapped speed • Instant handshake
+                    </div>
+                  </div>
                 )}
-                <div className="text-[11px] text-gray-500">
-                  Fast direct streaming from Google Drive storage backend • 0 bandwidth throttling
-                </div>
               </div>
             </div>
           )}
 
-          {/* Verification Badges */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-dark-border/60 text-xs text-gray-400">
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-dark-bg/60 border border-dark-border/60">
-              <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Virus & Malware Scanned</span>
+          {/* Security & Verification Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-6 border-t border-white/10 text-xs text-gray-400">
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/5">
+              <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+              <div>
+                <div className="font-bold text-white text-[11px]">Clean File Certificate</div>
+                <div className="text-[10px] text-gray-500">Virus & Trojan Free</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-dark-bg/60 border border-dark-border/60">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Anti-Bot Shield Active</span>
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/5">
+              <Server className="w-5 h-5 text-blue-400 shrink-0" />
+              <div>
+                <div className="font-bold text-white text-[11px]">Storage Redundancy</div>
+                <div className="text-[10px] text-gray-500">Google Cloud Backed</div>
+              </div>
             </div>
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-dark-bg/60 border border-dark-border/60">
-              <Flame className="w-4 h-4 text-rage-accent shrink-0" />
-              <span>RAGE Cloud Verified</span>
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/5">
+              <Sparkles className="w-5 h-5 text-rage-accent shrink-0" />
+              <div>
+                <div className="font-bold text-white text-[11px]">Creator Monetized</div>
+                <div className="text-[10px] text-gray-500">Support Digital Creators</div>
+              </div>
             </div>
           </div>
         </div>
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-dark-border bg-dark-surface/40 py-4 px-6 text-center text-xs text-gray-500">
-        RAGE Cloud File Delivery Network &copy; 2026. All downloads monitored for abuse and DMCA compliance.
+      <footer className="border-t border-white/5 bg-black/40 py-6 px-6 text-center text-xs text-gray-500">
+        <p>RAGE Cloud Global Delivery Network &bull; Automated integrity checking and anti-abuse verification enabled.</p>
       </footer>
     </div>
   );

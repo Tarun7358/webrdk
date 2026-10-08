@@ -10,7 +10,9 @@ import {
   Users,
   Share2,
   Crown,
-  ShieldAlert
+  ShieldAlert,
+  HardDrive,
+  Sparkles
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -18,13 +20,13 @@ export const Sidebar: React.FC = () => {
 
   const links = [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { to: '/files', label: 'My Files', icon: FolderOpen },
-    { to: '/upload', label: 'Upload Files', icon: UploadCloud },
+    { to: '/files', label: 'My Vault', icon: FolderOpen },
+    { to: '/upload', label: 'Upload Station', icon: UploadCloud },
     { to: '/creator', label: 'Creator Hub', icon: TrendingUp },
-    { to: '/wallet', label: 'Wallet & Ledger', icon: Wallet },
-    { to: '/teams', label: 'Teams', icon: Users },
-    { to: '/referrals', label: 'Referrals', icon: Share2 },
-    { to: '/premium', label: 'Premium Plans', icon: Crown },
+    { to: '/wallet', label: 'Wallet & Payouts', icon: Wallet },
+    { to: '/teams', label: 'Teams & Orgs', icon: Users },
+    { to: '/referrals', label: 'Referral Rewards', icon: Share2 },
+    { to: '/premium', label: 'Plans & Boosters', icon: Crown },
   ];
 
   if (user?.role === 'SUPER_ADMIN') {
@@ -32,10 +34,13 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside className="w-64 border-r border-dark-border bg-dark-surface/50 p-4 flex flex-col justify-between hidden md:flex shrink-0 min-h-[calc(100vh-4rem)]">
+    <aside className="w-64 border-r border-white/[0.08] bg-[#0d1424]/60 backdrop-blur-xl p-4 flex flex-col justify-between hidden md:flex shrink-0 min-h-[calc(100vh-4rem)]">
       <div className="space-y-6">
-        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider px-3">
-          Platform Navigation
+        <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest px-3 flex items-center justify-between">
+          <span>Navigation</span>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-mono">
+            LIVE
+          </span>
         </div>
         <nav className="space-y-1">
           {links.map((link) => {
@@ -45,35 +50,46 @@ export const Sidebar: React.FC = () => {
                 key={link.to}
                 to={link.to}
                 className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-all ${
+                  `flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium text-xs transition-all ${
                     isActive
-                      ? 'bg-rage-accent/10 text-rage-400 border border-rage-accent/30 shadow-rage-glow-sm'
-                      : 'text-gray-400 hover:text-gray-100 hover:bg-dark-card/60'
+                      ? 'bg-rose-500/15 text-white border border-rose-500/30 shadow-md shadow-rose-500/10'
+                      : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`
                 }
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{link.label}</span>
+                <Icon className="w-4 h-4 shrink-0 text-slate-400" />
+                <span className="font-semibold">{link.label}</span>
               </NavLink>
             );
           })}
         </nav>
       </div>
 
-      {/* Storage & Plan Badge */}
-      <div className="p-3.5 rounded-2xl bg-dark-card border border-dark-border">
-        <div className="flex items-center justify-between text-xs text-gray-400 mb-1.5">
-          <span>Storage Backend</span>
-          <span className="text-emerald-400 font-mono text-[11px] font-semibold">Active</span>
+      {/* Storage Backend & Quota Card */}
+      <div className="p-4 rounded-2xl bg-slate-900/80 border border-white/10 shadow-lg relative overflow-hidden">
+        <div className="flex items-center justify-between text-xs mb-2">
+          <div className="flex items-center gap-1.5 text-slate-300 font-semibold text-[11px]">
+            <HardDrive className="w-3.5 h-3.5 text-rose-400" />
+            <span>Google Drive CDN</span>
+          </div>
+          <span className="text-emerald-400 font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20">
+            5 TB Tier
+          </span>
         </div>
-        <div className="w-full bg-dark-bg rounded-full h-2 overflow-hidden mb-2">
-          <div className="bg-gradient-to-r from-red-600 to-rage-accent h-full w-[28%]" />
+
+        <div className="w-full bg-slate-950 rounded-full h-1.5 overflow-hidden mb-2.5">
+          <div className="bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-400 h-full w-[24%]" />
         </div>
-        <div className="flex justify-between items-center text-[11px]">
-          <span className="text-gray-500">Google Drive API</span>
-          <NavLink to="/premium" className="text-rage-400 font-medium hover:underline">Upgrade</NavLink>
+
+        <div className="flex justify-between items-center text-[10px] text-slate-400">
+          <span>1.2 TB used of 5 TB</span>
+          <NavLink to="/premium" className="text-rose-400 font-bold hover:text-rose-300 flex items-center gap-1">
+            <Sparkles className="w-2.5 h-2.5" />
+            Boost
+          </NavLink>
         </div>
       </div>
     </aside>
   );
 };
+
