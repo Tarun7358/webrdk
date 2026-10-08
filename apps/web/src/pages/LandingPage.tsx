@@ -7,7 +7,6 @@ import {
   ArrowRight,
   HardDrive,
   Sparkles,
-  Zap,
   DollarSign,
   Activity,
   CheckCircle2
@@ -35,12 +34,6 @@ export const LandingPage: React.FC = () => {
         <div className="absolute top-1/3 right-10 w-[400px] h-[350px] bg-blue-600/10 blur-[140px] pointer-events-none rounded-full" />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
-          {/* Release Status Badge */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300 text-xs font-semibold mb-8 shadow-sm shadow-rose-500/20 backdrop-blur-md">
-            <span className="flex h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-            <Flame className="w-3.5 h-3.5 text-rose-400" />
-            <span>RAGE Cloud v2.4 • High-Yield Creator File Network</span>
-          </div>
 
           <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight text-white max-w-4xl mx-auto leading-[1.08]">
             Upload Files. Share Links. <br />
@@ -128,10 +121,6 @@ export const LandingPage: React.FC = () => {
       <section className="py-20 bg-slate-950/60 border-y border-white/[0.08] relative">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold mb-3">
-              <Zap className="w-3.5 h-3.5" />
-              <span>Transparent Yield Calculator</span>
-            </div>
             <h2 className="font-display text-2xl sm:text-3xl font-extrabold text-white">
               Calculate Your Monthly Revenue Potential
             </h2>
@@ -214,10 +203,6 @@ export const LandingPage: React.FC = () => {
       {/* Bento Grid Platform Highlights */}
       <section className="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold mb-3">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Architecture & Trust</span>
-          </div>
           <h2 className="font-display text-3xl sm:text-4xl font-extrabold text-white">
             Engineered for Creators at Scale
           </h2>
