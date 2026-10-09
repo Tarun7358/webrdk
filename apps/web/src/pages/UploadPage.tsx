@@ -14,8 +14,6 @@ import {
   ShieldCheck,
   Copy,
   ExternalLink,
-  Sparkles,
-  Zap,
   HardDrive
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
@@ -100,12 +98,6 @@ export const UploadPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="px-2.5 py-0.5 rounded-full bg-rage-accent/10 border border-rage-accent/20 text-rage-accent text-[11px] font-bold tracking-wider uppercase inline-flex items-center gap-1.5">
-              <Zap className="w-3 h-3" />
-              <span>Multi-Region Cloud Ingest</span>
-            </span>
-          </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight flex items-center gap-2.5">
             <UploadCloud className="w-7 h-7 text-rage-accent" />
             <span>Upload Station</span>
@@ -267,9 +259,6 @@ export const UploadPage: React.FC = () => {
                 <h3 className="font-bold text-sm text-white">Monetization & Distribution Model</h3>
                 <p className="text-xs text-gray-400 mt-0.5">Control access rights, advertisement revenue eligibility, or paywall gate.</p>
               </div>
-              <span className="text-[11px] font-mono text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> 60% Split
-              </span>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
