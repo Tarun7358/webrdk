@@ -174,11 +174,13 @@ export const api = {
     daily_limit?: number;
   }) => request<any>('/integrations/instagram/connect', { method: 'POST', body: JSON.stringify(data) }),
   disconnectInstagramAccount: () => request<any>('/integrations/instagram/disconnect', { method: 'POST' }),
+  getInstagramMedia: () => request<any>('/integrations/instagram/media'),
   getInstagramCampaigns: () => request<any>('/integrations/instagram/campaigns'),
   createInstagramCampaign: (data: {
     file_id: string;
     title: string;
     post_url?: string;
+    target_mode?: 'SPECIFIC' | 'ANY' | 'NEXT';
     trigger_keywords: string;
     dm_templates: string[];
     reply_comments?: string[];
@@ -187,6 +189,7 @@ export const api = {
   updateInstagramCampaign: (campaignId: string, data: {
     title?: string;
     post_url?: string;
+    target_mode?: 'SPECIFIC' | 'ANY' | 'NEXT';
     trigger_keywords?: string;
     dm_templates?: string[];
     reply_comments?: string[];

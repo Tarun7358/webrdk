@@ -59,6 +59,7 @@ interface InstagramCampaign {
   file_name: string;
   title: string;
   post_url?: string;
+  target_mode?: 'SPECIFIC' | 'ANY' | 'NEXT';
   trigger_keywords: string;
   dm_templates: string[];
   reply_comments: string[];
@@ -140,6 +141,7 @@ export const InstagramAutoDmPage: React.FC = () => {
     title: '',
     file_id: '',
     post_url: '',
+    target_mode: 'SPECIFIC' as 'SPECIFIC' | 'ANY' | 'NEXT',
     trigger_keywords: 'link, send, dl, download, pack',
     dm_templates: [
       'Hey @{username}! 🔥 Here is your requested download link for {file_name}: {download_link}',
@@ -155,6 +157,11 @@ export const InstagramAutoDmPage: React.FC = () => {
   });
   const [isSavingCampaign, setIsSavingCampaign] = useState(false);
   const [campaignError, setCampaignError] = useState<string | null>(null);
+
+  // Post picker (Superprofile-style grid)
+  const [mediaItems, setMediaItems] = useState<any[]>([]);
+  const [isLoadingMedia, setIsLoadingMedia] = useState(false);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   // Detect OAuth redirect outcomes
   useEffect(() => {
@@ -376,13 +383,18 @@ export const InstagramAutoDmPage: React.FC = () => {
       setCampaignError('Please enter at least one DM template variation.');
       return;
     }
+    if (campaignForm.target_mode === 'SPECIFIC' && !campaignForm.post_url.trim()) {
+      setCampaignError('Please pick a Post/Reel (or choose "Any" / "Next" Post/Reel).');
+      return;
+    }
 
     try {
       setIsSavingCampaign(true);
       if (editingCampaign) {
         const updated = await api.updateInstagramCampaign(editingCampaign.id, {
           title: campaignForm.title,
-          post_url: campaignForm.post_url.trim() || undefined,
+          post_url: campaignForm.target_mode === 'SPECIFIC' ? (campaignForm.post_url.trim() || undefined) : undefined,
+          target_mode: campaignForm.target_mode,
           trigger_keywords: campaignForm.trigger_keywords,
           dm_templates: validTemplates,
           reply_comments: campaignForm.reply_comments.filter(r => r.trim().length > 0),
@@ -393,7 +405,8 @@ export const InstagramAutoDmPage: React.FC = () => {
         const created = await api.createInstagramCampaign({
           file_id: campaignForm.file_id,
           title: campaignForm.title,
-          post_url: campaignForm.post_url.trim() || undefined,
+          post_url: campaignForm.target_mode === 'SPECIFIC' ? (campaignForm.post_url.trim() || undefined) : undefined,
+          target_mode: campaignForm.target_mode,
           trigger_keywords: campaignForm.trigger_keywords,
           dm_templates: validTemplates,
           reply_comments: campaignForm.reply_comments.filter(r => r.trim().length > 0),
@@ -431,12 +444,30 @@ export const InstagramAutoDmPage: React.FC = () => {
     }
   };
 
+  const loadMedia = async () => {
+    try {
+      setIsLoadingMedia(true);
+      setMediaError(null);
+      const res = await api.getInstagramMedia();
+      setMediaItems(res?.media || []);
+      if (!res?.media?.length) {
+        setMediaError('No posts found. Instagram may be rate-limiting, try again in a minute.');
+      }
+    } catch (err: any) {
+      setMediaError(err.message || 'Could not load your posts.');
+    } finally {
+      setIsLoadingMedia(false);
+    }
+  };
+
   const openCreateModal = () => {
+    loadMedia();
     setEditingCampaign(null);
     setCampaignForm({
       title: '',
       file_id: files[0]?.id || '',
       post_url: '',
+      target_mode: 'SPECIFIC',
       trigger_keywords: 'link, send, dl, download, pack',
       dm_templates: [
         'Hey @{username}! 🔥 Here is your requested download link for {file_name}: {download_link}',
@@ -455,11 +486,13 @@ export const InstagramAutoDmPage: React.FC = () => {
   };
 
   const openEditModal = (c: InstagramCampaign) => {
+    loadMedia();
     setEditingCampaign(c);
     setCampaignForm({
       title: c.title,
       file_id: c.file_id,
       post_url: c.post_url || '',
+      target_mode: c.target_mode || 'SPECIFIC',
       trigger_keywords: c.trigger_keywords,
       dm_templates: c.dm_templates.length > 0 ? c.dm_templates : ['Hey @{username}! Link: {download_link}'],
       reply_comments: c.reply_comments.length > 0 ? c.reply_comments : ['Sent to your DM! 📩'],
@@ -1575,20 +1608,102 @@ export const InstagramAutoDmPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Instagram Reel URL field for Option A */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">
-                  Instagram Reel or Post URL (Optional for Reel Scanning)
+              {/* Post/Reel picker */}
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-gray-300">
+                  The comment is on...
                 </label>
-                <input
-                  type="url"
-                  value={campaignForm.post_url}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, post_url: e.target.value })}
-                  placeholder="https://www.instagram.com/reel/C6O1X1pS6yP/ or https://www.instagram.com/p/..."
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Paste your Instagram Reel link so you can click <strong>"Scan Reel Comments"</strong> anytime to auto-deliver DMs to new commenters.
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    ['SPECIFIC', 'Specific Post/Reel'],
+                    ['ANY', 'Any Post/Reel'],
+                    ['NEXT', 'Next Post/Reel']
+                  ] as const).map(([mode, label]) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setCampaignForm({ ...campaignForm, target_mode: mode })}
+                      className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all ${
+                        campaignForm.target_mode === mode
+                          ? 'bg-pink-500/15 border-pink-500/50 text-pink-300'
+                          : 'bg-black/30 border-white/10 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {campaignForm.target_mode === 'SPECIFIC' && (
+                  <div className="space-y-2">
+                    {isLoadingMedia ? (
+                      <div className="py-8 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+                        <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                        Loading your posts from Instagram...
+                      </div>
+                    ) : mediaItems.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+                        {mediaItems.map((m) => {
+                          const url = `https://www.instagram.com/p/${m.code}/`;
+                          const selected = campaignForm.post_url.includes(`/${m.code}`);
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => setCampaignForm({ ...campaignForm, post_url: url })}
+                              className={`relative aspect-[4/5] rounded-xl overflow-hidden border-2 transition-all ${
+                                selected ? 'border-pink-500 ring-2 ring-pink-500/40' : 'border-transparent hover:border-white/30'
+                              }`}
+                              title={m.caption || 'Post'}
+                            >
+                              {m.thumbnail_url ? (
+                                <img
+                                  src={m.thumbnail_url}
+                                  alt={m.caption || 'Instagram post'}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full bg-white/5 flex items-center justify-center text-gray-500 text-[10px]">No preview</div>
+                              )}
+                              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-white">
+                                💬 {m.comment_count}
+                              </span>
+                              {selected && (
+                                <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-pink-500 text-white text-[11px] flex items-center justify-center">✓</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-amber-400">{mediaError || 'No posts loaded.'}</p>
+                    )}
+                    <input
+                      type="url"
+                      value={campaignForm.post_url}
+                      onChange={(e) => setCampaignForm({ ...campaignForm, post_url: e.target.value })}
+                      placeholder="...or paste a Reel/Post link: https://www.instagram.com/reel/..."
+                      className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
+                    />
+                    <button type="button" onClick={loadMedia} className="text-[11px] text-pink-400 hover:text-pink-300">
+                      ↻ Refresh posts
+                    </button>
+                  </div>
+                )}
+
+                {campaignForm.target_mode === 'ANY' && (
+                  <p className="text-[11px] text-gray-400 p-3 rounded-xl bg-black/30 border border-white/5">
+                    Comments on your 5 most recent posts/reels are watched automatically.
+                  </p>
+                )}
+                {campaignForm.target_mode === 'NEXT' && (
+                  <p className="text-[11px] text-gray-400 p-3 rounded-xl bg-black/30 border border-white/5">
+                    Only posts/reels you publish after creating this campaign are watched.
+                  </p>
+                )}
+                <p className="text-[10px] text-emerald-400/80">
+                  ⚡ Live: new comments are checked automatically about every 90 seconds. No button needed.
                 </p>
               </div>
 

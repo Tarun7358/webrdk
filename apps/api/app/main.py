@@ -44,6 +44,7 @@ async def run_db_migrations(conn):
             await conn.execute(text("ALTER TABLE instagram_accounts ALTER COLUMN instagram_business_id DROP NOT NULL;"))
             await conn.execute(text("ALTER TABLE instagram_campaigns ADD COLUMN IF NOT EXISTS post_url VARCHAR(500);"))
             await conn.execute(text("ALTER TABLE instagram_campaigns ADD COLUMN IF NOT EXISTS last_scanned_at TIMESTAMP;"))
+            await conn.execute(text("ALTER TABLE instagram_campaigns ADD COLUMN IF NOT EXISTS target_mode VARCHAR(20) DEFAULT 'SPECIFIC' NOT NULL;"))
             logger.info("PostgreSQL Instagram schema migration completed.")
         else:
             res = await conn.execute(text("PRAGMA table_info(users)"))
@@ -60,6 +61,7 @@ async def run_db_migrations(conn):
                 ("instagram_accounts", "connection_type", "VARCHAR(20) DEFAULT 'SESSION' NOT NULL"),
                 ("instagram_campaigns", "post_url", "VARCHAR(500)"),
                 ("instagram_campaigns", "last_scanned_at", "DATETIME"),
+                ("instagram_campaigns", "target_mode", "VARCHAR(20) DEFAULT 'SPECIFIC' NOT NULL"),
             ]:
                 info = await conn.execute(text(f"PRAGMA table_info({table})"))
                 existing = [row[1] for row in info.fetchall()]
@@ -212,10 +214,15 @@ async def lifespan(app: FastAPI):
     # Launch background worker
     worker_task = asyncio.create_task(background_worker_loop())
 
+    # Launch real-time Instagram comment scanner (auto-DM)
+    from app.services.instagram.service import InstagramAutoDmService
+    ig_scanner_task = asyncio.create_task(InstagramAutoDmService.run_live_scanner(lambda: AsyncSessionLocal(), 90))
+
     yield
 
     # Shutdown
     worker_task.cancel()
+    ig_scanner_task.cancel()
     try:
         await redis_manager.disconnect()
     except Exception:

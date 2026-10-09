@@ -466,6 +466,8 @@ async def list_campaigns(
             file_name=f_name or "Untitled File",
             title=camp.title,
             post_url=camp.post_url,
+            target_mode=camp.target_mode or "SPECIFIC",
+            last_scanned_at=camp.last_scanned_at,
             trigger_keywords=camp.trigger_keywords,
             dm_templates=dm_templates,
             reply_comments=reply_comments,
@@ -502,6 +504,7 @@ async def create_campaign(
         file_id=payload.file_id,
         title=payload.title,
         post_url=payload.post_url,
+        target_mode=(payload.target_mode or "SPECIFIC").upper() if (payload.target_mode or "SPECIFIC").upper() in ("SPECIFIC", "ANY", "NEXT") else "SPECIFIC",
         trigger_keywords=payload.trigger_keywords,
         dm_templates_json=json.dumps(payload.dm_templates),
         reply_comments_json=json.dumps(payload.reply_comments or ["Sent to your DM! 📩", "Check your message requests! 🚀"]),
@@ -519,6 +522,8 @@ async def create_campaign(
         file_name=file_obj.name,
         title=campaign.title,
         post_url=campaign.post_url,
+        target_mode=campaign.target_mode or "SPECIFIC",
+        last_scanned_at=campaign.last_scanned_at,
         trigger_keywords=campaign.trigger_keywords,
         dm_templates=payload.dm_templates,
         reply_comments=payload.reply_comments or [],
@@ -548,6 +553,8 @@ async def update_campaign(
         camp.title = payload.title
     if payload.post_url is not None:
         camp.post_url = payload.post_url
+    if payload.target_mode is not None and payload.target_mode.upper() in ("SPECIFIC", "ANY", "NEXT"):
+        camp.target_mode = payload.target_mode.upper()
     if payload.trigger_keywords is not None:
         camp.trigger_keywords = payload.trigger_keywords
     if payload.dm_templates is not None:
@@ -571,6 +578,8 @@ async def update_campaign(
         file_name=f_name or "Untitled File",
         title=camp.title,
         post_url=camp.post_url,
+        target_mode=camp.target_mode or "SPECIFIC",
+        last_scanned_at=camp.last_scanned_at,
         trigger_keywords=camp.trigger_keywords,
         dm_templates=dm_templates,
         reply_comments=reply_comments,
@@ -598,6 +607,19 @@ async def scan_campaign_comments(
 
     result = await InstagramAutoDmService.scan_and_execute_campaign(campaign_id, db)
     return result
+
+@router.get("/media")
+async def list_my_instagram_media(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Recent posts/reels of the connected account, for the post picker grid."""
+    stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id, InstagramAccount.is_active == True)
+    account = (await db.execute(stmt)).scalar_one_or_none()
+    if not account or not account.session_cookie:
+        raise HTTPException(status_code=400, detail="Connect your Instagram account first.")
+    media = await InstagramAutoDmService.fetch_user_media(account.session_cookie, account.instagram_business_id or "")
+    return {"username": account.username, "profile_picture_url": account.profile_picture_url, "media": media}
 
 @router.delete("/campaigns/{campaign_id}")
 async def delete_campaign(

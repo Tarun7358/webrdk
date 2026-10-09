@@ -620,15 +620,9 @@ class InstagramAutoDmService:
         if not session_cookie:
             return {"status": "ERROR", "processed": 0, "reason": "No active session cookie found"}
 
-        shortcode = cls.extract_shortcode_from_url(campaign.post_url or "")
-        media_id = cls.shortcode_to_media_id(shortcode) if shortcode else None
-
-        if not media_id:
-            return {"status": "SKIPPED", "processed": 0, "reason": "Please provide a valid Reel or Post URL"}
-
-        comments = await cls.fetch_media_comments(session_cookie, media_id)
-        if not comments:
-            return {"status": "OK", "processed": 0, "message": "No comments found on Reel"}
+        media_targets = await cls._resolve_target_media(campaign, account, session_cookie)
+        if not media_targets:
+            return {"status": "SKIPPED", "processed": 0, "reason": "No target Reel/Post found. Pick a post for this campaign."}
 
         today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if account.last_reset_date != today_str:
@@ -636,65 +630,193 @@ class InstagramAutoDmService:
             account.last_reset_date = today_str
 
         sent_count = 0
+        scanned = 0
+        matched = 0
         download_url = f"https://rdkwebsite.netlify.app/d/{file_obj.short_code or file_obj.id}"
 
-        for comment in comments:
-            comment_text = comment.get("text", "")
-            username = comment.get("username", "")
-            user_id = comment.get("user_id", "")
-            comment_id = comment.get("id", "")
+        # Hourly velocity cap (counts SENT logs of all this account's campaigns in last hour)
+        hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        hour_stmt = select(func.count(InstagramDmLog.id)).join(
+            InstagramCampaign, InstagramDmLog.campaign_id == InstagramCampaign.id
+        ).where(
+            InstagramCampaign.instagram_account_id == account.id,
+            InstagramDmLog.status == "SENT",
+            InstagramDmLog.created_at >= hour_ago
+        )
+        sent_last_hour = (await session.execute(hour_stmt)).scalar() or 0
+        limit_hit = False
 
-            if username.lower() == account.username.lower():
-                continue
-
-            if cls.is_opt_out(comment_text):
-                continue
-
-            if not cls.matches_keywords(comment_text, campaign.trigger_keywords):
-                continue
-
-            if account.dms_sent_today >= account.daily_limit:
+        import asyncio
+        for media_id in media_targets:
+            if limit_hit:
                 break
+            comments = await cls.fetch_media_comments(session_cookie, media_id)
+            for comment in comments:
+                scanned += 1
+                comment_text = comment.get("text", "")
+                username = comment.get("username", "")
+                user_id = comment.get("user_id", "")
+                comment_id = comment.get("id", "")
 
-            twenty_four_hrs_ago = datetime.now(timezone.utc) - timedelta(hours=24)
-            dedup_stmt = select(InstagramDmLog).where(
-                InstagramDmLog.campaign_id == campaign.id,
-                InstagramDmLog.recipient_username == username,
-                InstagramDmLog.created_at >= twenty_four_hrs_ago
-            )
-            dedup_res = await session.execute(dedup_stmt)
-            if dedup_res.scalar_one_or_none():
-                continue
+                if not username or username.lower() == account.username.lower():
+                    continue
 
-            dm_text = cls.select_spintax_variant(
-                campaign.dm_templates_json,
-                username=username,
-                file_name=file_obj.name,
-                download_link=download_url
-            )
+                if cls.is_opt_out(comment_text):
+                    continue
 
-            import asyncio
-            await asyncio.sleep(random.uniform(2.5, 5.0))
+                if not cls.matches_keywords(comment_text, campaign.trigger_keywords):
+                    continue
+                matched += 1
 
-            success, err = await cls.send_private_dm(session_cookie, username, dm_text)
+                if account.dms_sent_today >= account.daily_limit or (sent_last_hour + sent_count) >= account.hourly_limit:
+                    limit_hit = True
+                    break
 
-            log = InstagramDmLog(
-                campaign_id=campaign.id,
-                recipient_ig_id=user_id or "unknown",
-                recipient_username=username,
-                comment_id=comment_id,
-                comment_text=comment_text,
-                dm_text_sent=dm_text if success else None,
-                status="SENT" if success else "FAILED",
-                error_message=err
-            )
-            session.add(log)
+                # Never process the same comment twice, and max 1 DM per user per 24h
+                if comment_id:
+                    seen_stmt = select(InstagramDmLog.id).where(
+                        InstagramDmLog.campaign_id == campaign.id,
+                        InstagramDmLog.comment_id == comment_id
+                    ).limit(1)
+                    if (await session.execute(seen_stmt)).first():
+                        continue
 
-            if success:
-                account.dms_sent_today += 1
-                campaign.total_dms_sent += 1
-                sent_count += 1
+                twenty_four_hrs_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+                dedup_stmt = select(InstagramDmLog.id).where(
+                    InstagramDmLog.campaign_id == campaign.id,
+                    InstagramDmLog.recipient_username == username,
+                    InstagramDmLog.created_at >= twenty_four_hrs_ago
+                ).limit(1)
+                if (await session.execute(dedup_stmt)).first():
+                    continue
+
+                dm_text = cls.select_spintax_variant(
+                    campaign.dm_templates_json,
+                    username=username,
+                    file_name=file_obj.name,
+                    download_link=download_url
+                )
+
+                await asyncio.sleep(random.uniform(2.5, 5.0))
+
+                success, err = await cls.send_private_dm(session_cookie, username, dm_text)
+
+                log = InstagramDmLog(
+                    campaign_id=campaign.id,
+                    recipient_ig_id=user_id or "unknown",
+                    recipient_username=username,
+                    comment_id=comment_id,
+                    comment_text=comment_text,
+                    dm_text_sent=dm_text if success else None,
+                    status="SENT" if success else "FAILED",
+                    error_message=err
+                )
+                session.add(log)
+
+                if success:
+                    account.dms_sent_today += 1
+                    campaign.total_dms_sent += 1
+                    sent_count += 1
+                await session.commit()
 
         campaign.last_scanned_at = datetime.now(timezone.utc)
         await session.commit()
-        return {"status": "SUCCESS", "processed": sent_count}
+        return {
+            "status": "SUCCESS",
+            "processed": sent_count,
+            "total_comments_scanned": scanned,
+            "matched_comments": matched,
+            "dms_dispatched": sent_count,
+            "limit_reached": limit_hit
+        }
+
+    @classmethod
+    async def _resolve_target_media(cls, campaign, account, session_cookie: str) -> List[int]:
+        """Returns media ids to scan based on campaign.target_mode (SPECIFIC / ANY / NEXT)."""
+        mode = (getattr(campaign, "target_mode", None) or "SPECIFIC").upper()
+        if mode == "SPECIFIC":
+            shortcode = cls.extract_shortcode_from_url(campaign.post_url or "")
+            media_id = cls.shortcode_to_media_id(shortcode) if shortcode else None
+            return [media_id] if media_id else []
+
+        media = await cls.fetch_user_media(session_cookie, account.instagram_business_id or "")
+        if mode == "NEXT" and campaign.created_at:
+            created = campaign.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            created_ts = created.timestamp()
+            media = [m for m in media if (m.get("taken_at") or 0) >= created_ts]
+        ids: List[int] = []
+        for m in media[:5]:
+            try:
+                ids.append(int(str(m["id"]).split("_")[0]))
+            except Exception:
+                continue
+        return ids
+
+    @classmethod
+    async def fetch_user_media(cls, session_cookie: str, user_id: str, count: int = 24) -> List[Dict[str, Any]]:
+        """Lists the creator's recent posts/reels (for the post picker grid)."""
+        if not user_id:
+            return []
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "X-IG-App-ID": "936619743392459",
+            "Cookie": f"sessionid={session_cookie};"
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    f"https://www.instagram.com/api/v1/feed/user/{user_id}/?count={count}",
+                    headers=headers
+                )
+                if resp.status_code != 200:
+                    return []
+                out: List[Dict[str, Any]] = []
+                for it in resp.json().get("items", []):
+                    cands = (it.get("image_versions2") or {}).get("candidates") or []
+                    if not cands and it.get("carousel_media"):
+                        cands = (it["carousel_media"][0].get("image_versions2") or {}).get("candidates") or []
+                    thumb = cands[min(1, len(cands) - 1)]["url"] if cands else None
+                    out.append({
+                        "id": str(it.get("pk")),
+                        "code": it.get("code"),
+                        "thumbnail_url": thumb,
+                        "caption": ((it.get("caption") or {}).get("text") or "")[:120],
+                        "media_type": it.get("media_type"),
+                        "comment_count": it.get("comment_count", 0),
+                        "taken_at": it.get("taken_at")
+                    })
+                return out
+        except Exception as e:
+            logger.error(f"Error fetching Instagram media: {e}")
+            return []
+
+    @classmethod
+    async def run_live_scanner(cls, session_factory, interval_seconds: int = 90):
+        """Background loop: auto-scans all active session-based campaigns so DMs go out in near real time."""
+        import asyncio
+        await asyncio.sleep(20)
+        while True:
+            try:
+                async with session_factory() as db:
+                    stmt = select(InstagramCampaign.id).join(
+                        InstagramAccount, InstagramCampaign.instagram_account_id == InstagramAccount.id
+                    ).where(
+                        InstagramCampaign.is_active == True,
+                        InstagramAccount.is_active == True,
+                        InstagramAccount.session_cookie.isnot(None)
+                    )
+                    campaign_ids = [r[0] for r in (await db.execute(stmt)).all()]
+                for cid in campaign_ids:
+                    try:
+                        async with session_factory() as db:
+                            await cls.scan_and_execute_campaign(cid, db)
+                    except Exception as e:
+                        logger.warning(f"Live scan failed for campaign {cid}: {e}")
+                    await asyncio.sleep(random.uniform(3, 8))
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.warning(f"Live scanner iteration error: {e}")
+            await asyncio.sleep(interval_seconds)

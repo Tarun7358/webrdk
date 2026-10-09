@@ -336,6 +336,7 @@ class InstagramCampaign(BaseModel):
     file_id = Column(String(36), ForeignKey("files.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
     post_url = Column(String(500), nullable=True) # Link to specific Reel or Post (e.g., https://instagram.com/reel/...)
+    target_mode = Column(String(20), default="SPECIFIC", nullable=False) # SPECIFIC, ANY (latest posts), NEXT (new posts only)
     trigger_keywords = Column(Text, nullable=False) # Comma-separated (e.g., "ob55,apk,download")
     dm_templates_json = Column(Text, nullable=False) # JSON array of spintax variants
     reply_comments_json = Column(Text, nullable=True) # JSON array of comment reply variants
