@@ -158,7 +158,6 @@ async def trigger_download(
             media_type=file.mime_type,
             headers={
                 "Content-Disposition": f'attachment; filename="{file.name}"',
-                "Content-Length": str(file.size),
                 "X-RAGE-Traffic-Status": "QUALIFIED" if fraud_eval["is_qualified"] else "UNQUALIFIED"
             }
         )

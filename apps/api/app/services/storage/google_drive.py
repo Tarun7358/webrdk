@@ -245,15 +245,41 @@ class GoogleDriveStorage(StorageService):
             raise RuntimeError("Google Drive client is not configured.")
 
         file_id = file_id_or_key.replace("gdrive://", "").split("/")[-1]
+
+        # 1. Preferred approach: stream directly from Google Drive API with AuthorizedSession
+        if self.credentials:
+            try:
+                from google.auth.transport.requests import AuthorizedSession
+                session = AuthorizedSession(self.credentials)
+                url = f"https://www.googleapis.com/drive/v3/files/{file_id}?alt=media"
+
+                resp = await asyncio.to_thread(session.get, url, stream=True)
+                if resp.status_code == 200:
+                    def chunk_generator():
+                        for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                            if chunk:
+                                yield chunk
+
+                    gen = chunk_generator()
+                    while True:
+                        chunk = await asyncio.to_thread(next, gen, None)
+                        if chunk is None:
+                            break
+                        yield chunk
+                        del chunk
+                    return
+                else:
+                    logger.warning(f"AuthorizedSession returned {resp.status_code}, falling back to MediaIoBaseDownload")
+            except Exception as e:
+                logger.warning(f"Direct AuthorizedSession stream failed ({e}), falling back to MediaIoBaseDownload")
+
+        # 2. Resilient fallback: MediaIoBaseDownload
         request = self.service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
-        # Cap chunksize to 1MB (1024*1024) instead of default 100MB to prevent container OOM (Out Of Memory) crashes
-        downloader = MediaIoBaseDownload(fh, request, chunksize=1024 * 1024)
-
+        downloader = MediaIoBaseDownload(fh, request)
         done = False
         try:
             while not done:
-                # Run synchronous next_chunk in background worker thread to keep FastAPI event loop non-blocking
                 status, done = await asyncio.to_thread(downloader.next_chunk)
                 fh.seek(0)
                 chunk = fh.read()
@@ -269,6 +295,7 @@ class GoogleDriveStorage(StorageService):
                 pass
             del fh
             gc.collect()
+
 
 
     async def delete(self, file_id_or_key: str) -> bool:
