@@ -3,12 +3,13 @@ import uuid
 import logging
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select, text, func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-from app.core.database import engine, Base, AsyncSessionLocal
+from app.core.database import engine, Base, AsyncSessionLocal, get_db
 from app.core.redis import redis_manager
 from app.core.security import get_password_hash
 from app.models.schema_models import User, Wallet
@@ -281,3 +282,14 @@ async def health_check():
         "redis_connected": redis_manager.client is not None,
         "database": "postgresql" if "postgresql" in str(engine.url) else "sqlite"
     }
+
+@app.get("/d/{short_code}", tags=["Shares"])
+async def root_share_preview(
+    short_code: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    from app.api.v1.shares import get_share_preview_html
+    return await get_share_preview_html(short_code=short_code, request=request, db=db)
+
+

@@ -1,8 +1,10 @@
+import os
 import random
 import string
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import HTMLResponse, FileResponse as StarletteFileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from app.core.database import get_db
@@ -191,3 +193,104 @@ async def verify_share_password(
         raise HTTPException(status_code=401, detail="Invalid password for this file.")
 
     return {"unlocked": True, "token": f"unlocked_{link.short_code}"}
+
+@router.get("/banner/{short_code}")
+@router.get("/banner")
+async def get_share_banner_image(short_code: Optional[str] = None):
+    """
+    Returns the rich file preview image banner (3D document with zipper on cloud background).
+    """
+    asset_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets")
+    banner_path = os.path.join(asset_dir, "file_banner.jpg")
+    if os.path.exists(banner_path):
+        return StarletteFileResponse(
+            path=banner_path,
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=86400"}
+        )
+    raise HTTPException(status_code=404, detail="Preview banner image not found")
+
+@router.get("/preview/{short_code}", response_class=HTMLResponse)
+async def get_share_preview_html(
+    short_code: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Renders an HTML document containing OpenGraph and Twitter Card tags.
+    When a user pastes a link into Telegram, WhatsApp, Discord, or Twitter,
+    the crawler receives these tags to display the large banner preview.
+    """
+    stmt = select(ShareLink, File).join(
+        File, ShareLink.file_id == File.id
+    ).where(ShareLink.short_code == short_code, ShareLink.is_active == True)
+    res = await db.execute(stmt)
+    row = res.first()
+
+    if not row:
+        stmt_f = select(File).where(File.id == short_code, File.is_deleted == False)
+        res_f = await db.execute(stmt_f)
+        f_obj = res_f.scalar_one_or_none()
+        if f_obj:
+            sl_stmt = select(ShareLink).where(ShareLink.file_id == f_obj.id, ShareLink.is_active == True).order_by(ShareLink.created_at.desc())
+            sl_res = await db.execute(sl_stmt)
+            sl_obj = sl_res.scalars().first()
+            if sl_obj:
+                row = (sl_obj, f_obj)
+
+    file_name = row[1].name if row else f"File {short_code}"
+    file_size_mb = f"{(row[1].size / (1024 * 1024)):.2f} MB" if row else "Unknown Size"
+    ext = row[1].extension.upper() if row else "FILE"
+
+    base_url = str(request.base_url).rstrip("/")
+    frontend_origin = "https://rdkcloudservices.netlify.app"
+    frontend_url = f"{frontend_origin}/d/{short_code}"
+    # Use reliable HTTPS CDN URL for the preview banner
+    banner_url = f"{frontend_origin}/file_banner.jpg"
+    desc_text = f"{ext} • {file_size_mb} • High-Speed Cloud Download"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{file_name}</title>
+    <meta name="description" content="{desc_text}">
+
+    <!-- Open Graph (Telegram, WhatsApp, Facebook, Discord) -->
+    <meta property="og:site_name" content="RAGE Cloud">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{file_name}">
+    <meta property="og:description" content="{desc_text}">
+    <meta property="og:url" content="{frontend_url}">
+    <meta property="og:image" content="{banner_url}">
+    <meta property="og:image:secure_url" content="{banner_url}">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1024">
+    <meta property="og:image:height" content="1024">
+
+    <!-- Twitter Card (Large Summary Card) -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{file_name}">
+    <meta name="twitter:description" content="{desc_text}">
+    <meta name="twitter:image" content="{banner_url}">
+
+    <!-- Auto-redirect to frontend page -->
+    <meta http-equiv="refresh" content="0; url={frontend_url}">
+    <script>
+        window.location.replace("{frontend_url}");
+    </script>
+</head>
+<body style="background:#0b0f19;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;box-sizing:border-box;">
+    <div style="background:#111827;border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:32px;max-width:440px;width:100%;text-align:center;box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        <img src="{banner_url}" alt="{file_name}" style="width:140px;height:140px;border-radius:20px;margin-bottom:20px;object-fit:cover;box-shadow:0 10px 25px rgba(0,0,0,0.3);">
+        <h2 style="font-size:18px;font-weight:700;color:#fff;margin:0 0 8px 0;word-break:break-word;">{file_name}</h2>
+        <p style="font-size:13px;color:#94a3b8;margin:0 0 20px 0;">Size: {file_size_mb} • Format: {ext}</p>
+        <a href="{frontend_url}" style="display:inline-block;background:linear-gradient(135deg,#e11d48,#be123c);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 28px;border-radius:14px;box-shadow:0 4px 14px rgba(225,29,72,0.4);">
+            Download File
+        </a>
+    </div>
+</body>
+</html>"""
+    return HTMLResponse(content=html, media_type="text/html")
+

@@ -5,7 +5,6 @@ import type { PublicDownloadPageData } from '../types';
 import {
   Download,
   ShieldCheck,
-  File,
   Lock,
   DollarSign,
   AlertCircle,
@@ -42,6 +41,9 @@ export const DownloadPage: React.FC = () => {
       try {
         const res = await api.getPublicShare(shortCode);
         setData(res);
+        if (res.file_name) {
+          document.title = `${res.file_name} — RAGE Cloud`;
+        }
         if (!res.is_password_protected) {
           setIsUnlocked(true);
         }
@@ -229,8 +231,12 @@ export const DownloadPage: React.FC = () => {
           {/* File Meta Header */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-white/10">
             <div className="flex items-start sm:items-center gap-4">
-              <div className="w-16 h-16 rounded-3xl bg-black/60 border border-white/10 flex items-center justify-center text-rage-accent shadow-inner shrink-0 ring-4 ring-white/5">
-                <File className="w-8 h-8" />
+              <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center text-rage-accent shadow-xl shrink-0 ring-4 ring-white/5 relative">
+                <img 
+                  src="/file_banner.jpg" 
+                  alt={data.file_name} 
+                  className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" 
+                />
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-black text-white font-display break-all leading-tight">
