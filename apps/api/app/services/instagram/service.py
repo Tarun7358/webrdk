@@ -132,7 +132,7 @@ class InstagramAutoDmService:
             account.dms_sent_today = 0
             account.last_reset_date = today_str
 
-        if account.dms_sent_today >= account.daily_limit:
+        if account.daily_limit > 0 and account.dms_sent_today >= account.daily_limit:
             logger.warning(f"Account @{account.username} reached daily limit ({account.daily_limit})")
             return {"status": "RATE_LIMITED", "reason": "Daily limit reached"}
 
@@ -671,7 +671,9 @@ class InstagramAutoDmService:
                     continue
                 matched += 1
 
-                if account.dms_sent_today >= account.daily_limit or (sent_last_hour + sent_count) >= account.hourly_limit:
+                daily_exceeded = (account.daily_limit > 0 and account.dms_sent_today >= account.daily_limit)
+                hourly_exceeded = (account.hourly_limit > 0 and (sent_last_hour + sent_count) >= account.hourly_limit)
+                if daily_exceeded or hourly_exceeded:
                     limit_hit = True
                     break
 
@@ -700,7 +702,14 @@ class InstagramAutoDmService:
                     download_link=download_url
                 )
 
-                await asyncio.sleep(random.uniform(2.5, 5.0))
+                # Anti-Ban Safety Delay:
+                # When running in Unlimited or High-Volume mode, pace with human-like jitter delay (6s - 12s)
+                # to prevent Instagram automated spam rate blocks.
+                if account.daily_limit == 0 or account.hourly_limit == 0 or account.hourly_limit > 50:
+                    delay = random.uniform(6.0, 12.0)
+                else:
+                    delay = random.uniform(2.5, 5.0)
+                await asyncio.sleep(delay)
 
                 success, err = await cls.send_private_dm(session_cookie, username, dm_text)
 

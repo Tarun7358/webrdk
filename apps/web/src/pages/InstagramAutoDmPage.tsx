@@ -731,9 +731,9 @@ export const InstagramAutoDmPage: React.FC = () => {
                   IG ID: <span className="font-mono text-gray-300">{account.instagram_business_id || account.username}</span>
                 </p>
                 <div className="flex items-center gap-4 mt-2 text-xs text-gray-400">
-                  <span>Hourly Velocity Cap: <strong className="text-white">{account.hourly_limit}/hr</strong></span>
+                  <span>Hourly Velocity Cap: <strong className="text-white">{account.hourly_limit > 0 ? `${account.hourly_limit}/hr` : '∞ Unlimited (Paced)'}</strong></span>
                   <span>•</span>
-                  <span>Daily Quota: <strong className="text-white">{account.daily_limit}/day</strong></span>
+                  <span>Daily Quota: <strong className="text-white">{account.daily_limit > 0 ? `${account.daily_limit}/day` : '∞ Unlimited'}</strong></span>
                 </div>
               </div>
             </div>
@@ -743,17 +743,27 @@ export const InstagramAutoDmPage: React.FC = () => {
               <div className="flex justify-between items-center text-xs mb-1.5">
                 <span className="text-gray-400">Today's Delivery Quota</span>
                 <span className="font-mono text-pink-400 font-bold">
-                  {account.dms_sent_today} / {account.daily_limit} DMs
+                  {account.daily_limit > 0
+                    ? `${account.dms_sent_today} / ${account.daily_limit} DMs`
+                    : `${account.dms_sent_today} DMs Dispatched (∞ Unlimited)`}
                 </span>
               </div>
               <div className="w-full bg-white/10 h-2 rounded-full overflow-hidden">
                 <div
-                  className="bg-gradient-to-r from-pink-500 to-purple-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.round((account.dms_sent_today / (account.daily_limit || 1)) * 100))}%` }}
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    account.daily_limit > 0
+                      ? 'bg-gradient-to-r from-pink-500 to-purple-500'
+                      : 'bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-400 w-full animate-pulse'
+                  }`}
+                  style={{
+                    width: account.daily_limit > 0
+                      ? `${Math.min(100, Math.round((account.dms_sent_today / (account.daily_limit || 1)) * 100))}%`
+                      : '100%'
+                  }}
                 />
               </div>
               <p className="text-[10px] text-gray-500 mt-1.5 flex items-center gap-1">
-                <Clock className="w-3 h-3" /> Resets every 24 hours automatically
+                <Clock className="w-3 h-3" /> {account.daily_limit > 0 ? 'Resets every 24 hours automatically' : 'Continuous mode with anti-ban delay (6s-12s)'}
               </p>
             </div>
 
@@ -1729,75 +1739,132 @@ export const InstagramAutoDmPage: React.FC = () => {
             {/* Quick Presets */}
             <div>
               <label className="block text-xs font-semibold text-gray-300 mb-2">Quick Presets</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => setLimitsForm({ hourly_limit: 20, daily_limit: 60 })}
-                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
                     limitsForm.hourly_limit === 20 && limitsForm.daily_limit === 60
                       ? 'bg-pink-500/20 border-pink-500 text-white font-bold'
                       : 'bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  <p className="text-xs">Safe (Anti-Ban)</p>
-                  <p className="text-[10px] text-pink-400 font-mono mt-0.5">20/hr • 60/day</p>
+                  <p className="text-xs font-bold text-white">Safe (Default)</p>
+                  <p className="text-[10px] text-pink-400 font-mono mt-0.5">20/hr • 60/day (2.5s-5s delay)</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setLimitsForm({ hourly_limit: 50, daily_limit: 150 })}
-                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
                     limitsForm.hourly_limit === 50 && limitsForm.daily_limit === 150
                       ? 'bg-pink-500/20 border-pink-500 text-white font-bold'
                       : 'bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  <p className="text-xs">Growth Mode</p>
+                  <p className="text-xs font-bold text-white">Growth Mode</p>
                   <p className="text-[10px] text-pink-400 font-mono mt-0.5">50/hr • 150/day</p>
                 </button>
                 <button
                   type="button"
                   onClick={() => setLimitsForm({ hourly_limit: 100, daily_limit: 500 })}
-                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
                     limitsForm.hourly_limit === 100 && limitsForm.daily_limit === 500
                       ? 'bg-pink-500/20 border-pink-500 text-white font-bold'
                       : 'bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  <p className="text-xs">Turbo (High Vol)</p>
+                  <p className="text-xs font-bold text-white">High Volume</p>
                   <p className="text-[10px] text-pink-400 font-mono mt-0.5">100/hr • 500/day</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLimitsForm({ hourly_limit: 0, daily_limit: 0 })}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    limitsForm.hourly_limit === 0 && limitsForm.daily_limit === 0
+                      ? 'bg-emerald-500/20 border-emerald-500 text-white font-bold shadow-lg shadow-emerald-500/10'
+                      : 'bg-white/5 border-emerald-500/30 text-emerald-400 hover:text-white hover:bg-emerald-500/10'
+                  }`}
+                >
+                  <div className="flex items-center gap-1">
+                    <p className="text-xs font-bold text-emerald-300">🔥 Unlimited (Paced)</p>
+                  </div>
+                  <p className="text-[10px] text-emerald-400 font-mono mt-0.5">No Daily Cap • 6s-12s Delay</p>
                 </button>
               </div>
             </div>
 
             <form onSubmit={handleUpdateLimits} className="space-y-4">
+              {/* Unlimited Toggle Banner */}
+              <div
+                onClick={() => {
+                  if (limitsForm.daily_limit === 0 && limitsForm.hourly_limit === 0) {
+                    setLimitsForm({ hourly_limit: 20, daily_limit: 60 });
+                  } else {
+                    setLimitsForm({ hourly_limit: 0, daily_limit: 0 });
+                  }
+                }}
+                className={`p-3 rounded-xl border cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                  limitsForm.daily_limit === 0 && limitsForm.hourly_limit === 0
+                    ? 'bg-emerald-500/10 border-emerald-500/40 text-emerald-300'
+                    : 'bg-white/[0.02] border-white/10 hover:border-white/20 text-gray-400'
+                }`}
+              >
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-white">Continuous Unlimited Mode</span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold">
+                      Anti-Ban Safe
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">
+                    Sends to all commenters with human-like delays (6s – 12s) and spintax variation so Instagram never flags spam.
+                  </p>
+                </div>
+                <div
+                  className={`w-10 h-5 rounded-full transition-colors relative flex-shrink-0 p-0.5 ${
+                    limitsForm.daily_limit === 0 && limitsForm.hourly_limit === 0 ? 'bg-emerald-500' : 'bg-white/20'
+                  }`}
+                >
+                  <div
+                    className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                      limitsForm.daily_limit === 0 && limitsForm.hourly_limit === 0 ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-gray-300 mb-1">
-                    Hourly Cap (DMs / hr)
+                    Hourly Cap (0 = Unlimited)
                   </label>
                   <input
                     type="number"
-                    min={1}
-                    max={500}
+                    min={0}
+                    max={1000}
                     value={limitsForm.hourly_limit}
                     onChange={(e) => setLimitsForm({ ...limitsForm, hourly_limit: Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">Spread with human delay</p>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    {limitsForm.hourly_limit === 0 ? '∞ Unlimited (with delay)' : 'Max DMs per hour'}
+                  </p>
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-300 mb-1">
-                    Daily Limit (DMs / day)
+                    Daily Limit (0 = Unlimited)
                   </label>
                   <input
                     type="number"
-                    min={1}
-                    max={5000}
+                    min={0}
+                    max={10000}
                     value={limitsForm.daily_limit}
                     onChange={(e) => setLimitsForm({ ...limitsForm, daily_limit: Number(e.target.value) })}
                     className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
                   />
-                  <p className="text-[10px] text-gray-500 mt-1">Resets every 24 hours</p>
+                  <p className="text-[10px] text-gray-500 mt-1">
+                    {limitsForm.daily_limit === 0 ? '∞ Unlimited per day' : 'Resets every 24 hours'}
+                  </p>
                 </div>
               </div>
 
