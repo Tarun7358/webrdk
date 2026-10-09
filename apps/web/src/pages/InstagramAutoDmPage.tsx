@@ -93,7 +93,7 @@ export const InstagramAutoDmPage: React.FC = () => {
 
   // Modals
   const [showConnectModal, setShowConnectModal] = useState(false);
-  const [connectMode, setConnectMode] = useState<'session' | 'oauth' | 'manual'>('session');
+  const [connectMode, setConnectMode] = useState<'login' | 'session' | 'oauth' | 'manual'>('login');
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<InstagramCampaign | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
@@ -111,6 +111,12 @@ export const InstagramAutoDmPage: React.FC = () => {
   });
   const [isConnectingSession, setIsConnectingSession] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
+
+  // In-app Instagram Login (username/password + optional 2FA)
+  const [loginForm, setLoginForm] = useState({ username: '', password: '', two_factor_code: '' });
+  const [twoFactorIdentifier, setTwoFactorIdentifier] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   // 1-Click Meta OAuth States
   const [oauthLoading, setOauthLoading] = useState(false);
@@ -238,6 +244,45 @@ export const InstagramAutoDmPage: React.FC = () => {
       fetchLogs();
     }
   }, [activeTab, fetchLogs]);
+
+  // Handle in-app Instagram Login (auto-captures session, no cookie copy needed)
+  const handleInstagramLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+    if (!loginForm.username.trim() || !loginForm.password) {
+      setLoginError('Please enter your Instagram username and password.');
+      return;
+    }
+    if (twoFactorIdentifier && !loginForm.two_factor_code.trim()) {
+      setLoginError('Please enter the 6-digit verification code.');
+      return;
+    }
+    try {
+      setIsLoggingIn(true);
+      const res = await api.loginInstagramCredentials({
+        username: loginForm.username.trim(),
+        password: loginForm.password,
+        two_factor_code: twoFactorIdentifier ? loginForm.two_factor_code.trim() : undefined,
+        two_factor_identifier: twoFactorIdentifier || undefined
+      });
+      if (res.status === 'TWO_FACTOR_REQUIRED') {
+        setTwoFactorIdentifier(res.two_factor_identifier);
+        setLoginError(res.message || 'Enter your 2FA verification code.');
+        return;
+      }
+      if (res.status === 'CONNECTED') {
+        setAccount(res.account);
+        setShowConnectModal(false);
+        setOauthSuccess(`🎉 Connected @${res.username}! You can now create campaigns.`);
+        setLoginForm({ username: '', password: '', two_factor_code: '' });
+        setTwoFactorIdentifier(null);
+      }
+    } catch (err: any) {
+      setLoginError(err.message || 'Instagram login failed.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   // Handle Option A Session Connect
   const handleConnectSession = async (e: React.FormEvent) => {
@@ -481,7 +526,7 @@ export const InstagramAutoDmPage: React.FC = () => {
           ) : (
             <button
               onClick={() => {
-                setConnectMode('session');
+                setConnectMode('login');
                 setShowConnectModal(true);
               }}
               className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-semibold text-xs tracking-wide shadow-lg shadow-pink-600/20 flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
@@ -605,7 +650,7 @@ export const InstagramAutoDmPage: React.FC = () => {
           </div>
           <button
             onClick={() => {
-              setConnectMode('session');
+              setConnectMode('login');
               setShowConnectModal(true);
             }}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-semibold text-xs tracking-wide shadow-lg shadow-pink-600/20 flex items-center gap-2 whitespace-nowrap transition-all hover:scale-105 active:scale-95"
@@ -1074,7 +1119,18 @@ export const InstagramAutoDmPage: React.FC = () => {
             </div>
 
             {/* Mode Switcher Tabs */}
-            <div className="grid grid-cols-3 gap-1 p-1 bg-black/40 border border-white/10 rounded-xl text-xs">
+            <div className="grid grid-cols-4 gap-1 p-1 bg-black/40 border border-white/10 rounded-xl text-xs">
+              <button
+                type="button"
+                onClick={() => setConnectMode('login')}
+                className={`py-2 px-1 rounded-lg font-bold transition-all text-center ${
+                  connectMode === 'login'
+                    ? 'bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow-md'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                Instagram Login
+              </button>
               <button
                 type="button"
                 onClick={() => setConnectMode('session')}
@@ -1109,6 +1165,86 @@ export const InstagramAutoDmPage: React.FC = () => {
                 Developer Token
               </button>
             </div>
+
+            {/* MODE 0: IN-APP INSTAGRAM LOGIN */}
+            {connectMode === 'login' && (
+              <form onSubmit={handleInstagramLogin} className="space-y-4">
+                <div className="text-center space-y-1">
+                  <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-yellow-500 via-pink-500 to-purple-600 flex items-center justify-center text-white">
+                    <InstagramIcon className="w-6 h-6" />
+                  </div>
+                  <p className="text-sm font-bold text-white">Log in with Instagram</p>
+                  <p className="text-[11px] text-gray-400">
+                    Your password is sent only to Instagram and is never stored. We keep just the login session.
+                  </p>
+                </div>
+
+                {loginError && (
+                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${twoFactorIdentifier ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : 'bg-red-500/10 border border-red-500/20 text-red-400'}`}>
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{loginError}</span>
+                  </div>
+                )}
+
+                <input
+                  type="text"
+                  autoComplete="username"
+                  disabled={!!twoFactorIdentifier}
+                  value={loginForm.username}
+                  onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value.replace('@', '') })}
+                  placeholder="Username"
+                  className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 disabled:opacity-60"
+                />
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  disabled={!!twoFactorIdentifier}
+                  value={loginForm.password}
+                  onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                  placeholder="Password"
+                  className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 disabled:opacity-60"
+                />
+                {twoFactorIdentifier && (
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={8}
+                    value={loginForm.two_factor_code}
+                    onChange={(e) => setLoginForm({ ...loginForm, two_factor_code: e.target.value })}
+                    placeholder="6-digit 2FA code"
+                    className="w-full px-3 py-2.5 rounded-xl bg-black/40 border border-pink-500/50 text-white text-xs focus:outline-none focus:border-pink-500 font-mono tracking-widest text-center"
+                  />
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isLoggingIn}
+                  className="w-full py-2.5 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-pink-600/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {isLoggingIn ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <span>{twoFactorIdentifier ? 'Verify & Connect' : 'Log in & Connect'}</span>
+                  )}
+                </button>
+                {twoFactorIdentifier && (
+                  <button
+                    type="button"
+                    onClick={() => { setTwoFactorIdentifier(null); setLoginError(null); setLoginForm({ ...loginForm, two_factor_code: '' }); }}
+                    className="w-full text-[11px] text-gray-400 hover:text-white"
+                  >
+                    ← Use a different account
+                  </button>
+                )}
+                <p className="text-[10px] text-gray-500 text-center">
+                  If Instagram asks for a security check, approve the login in your Instagram app and try again, or use the Session ID tab.
+                </p>
+              </form>
+            )}
 
             {/* MODE 1: OPTION A SESSION COOKIE */}
             {connectMode === 'session' && (

@@ -20,6 +20,7 @@ class ConnectInstagramLoginRequest(BaseModel):
     username: str
     password: str
     two_factor_code: Optional[str] = None
+    two_factor_identifier: Optional[str] = None
     hourly_limit: Optional[int] = 20
     daily_limit: Optional[int] = 60
 

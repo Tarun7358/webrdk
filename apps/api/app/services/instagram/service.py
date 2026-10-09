@@ -362,6 +362,114 @@ class InstagramAutoDmService:
             return False, None, f"Failed to connect to Instagram servers: {str(e)}"
 
     @classmethod
+    async def login_with_credentials(
+        cls,
+        username: str,
+        password: str,
+        two_factor_code: Optional[str] = None,
+        two_factor_identifier: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Directly logs into Instagram Web with credentials (and 2FA if enabled).
+        Returns session_cookie automatically upon success.
+        """
+        user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+        clean_user = username.strip().replace("@", "")
+
+        try:
+            async with httpx.AsyncClient(timeout=25.0, follow_redirects=True) as client:
+                init_resp = await client.get(
+                    "https://www.instagram.com/accounts/login/",
+                    headers={"User-Agent": user_agent}
+                )
+                csrf_token = init_resp.cookies.get("csrftoken") or "missing"
+
+                headers = {
+                    "User-Agent": user_agent,
+                    "X-IG-App-ID": "936619743392459",
+                    "X-CSRFToken": csrf_token,
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": "https://www.instagram.com/accounts/login/",
+                    "Origin": "https://www.instagram.com"
+                }
+
+                if two_factor_code and two_factor_identifier:
+                    two_fa_data = {
+                        "username": clean_user,
+                        "verificationCode": two_factor_code.strip(),
+                        "identifier": two_factor_identifier,
+                        "queryParams": "{}"
+                    }
+                    two_fa_resp = await client.post(
+                        "https://www.instagram.com/api/v1/web/accounts/login/ajax/two_factor/",
+                        headers=headers,
+                        data=two_fa_data
+                    )
+                    res_json = two_fa_resp.json()
+                    if res_json.get("authenticated") or res_json.get("userId"):
+                        sessionid = client.cookies.get("sessionid") or two_fa_resp.cookies.get("sessionid")
+                        user_id = str(res_json.get("userId", ""))
+                        return {
+                            "success": True,
+                            "session_cookie": sessionid,
+                            "user_id": user_id,
+                            "username": clean_user
+                        }
+                    else:
+                        msg = res_json.get("message") or "Invalid two-factor authentication code."
+                        return {"success": False, "error": msg}
+
+                login_data = {
+                    "enc_password": f"#PWD_INSTAGRAM_BROWSER:0:{int(datetime.now().timestamp())}:{password}",
+                    "optIntoOneTap": "false",
+                    "queryParams": "{}",
+                    "trustedDeviceRecords": "{}",
+                    "username": clean_user
+                }
+
+                resp = await client.post(
+                    "https://www.instagram.com/api/v1/web/accounts/login/ajax/",
+                    headers=headers,
+                    data=login_data
+                )
+                
+                try:
+                    res_data = resp.json()
+                except Exception:
+                    return {"success": False, "error": f"Unexpected Instagram response ({resp.status_code})"}
+
+                if res_data.get("authenticated"):
+                    sessionid = client.cookies.get("sessionid") or resp.cookies.get("sessionid")
+                    user_id = str(res_data.get("userId", ""))
+                    return {
+                        "success": True,
+                        "session_cookie": sessionid,
+                        "user_id": user_id,
+                        "username": clean_user
+                    }
+                elif res_data.get("two_factor_required"):
+                    two_fa_info = res_data.get("two_factor_info", {})
+                    identifier = two_fa_info.get("two_factor_identifier")
+                    return {
+                        "success": False,
+                        "two_factor_required": True,
+                        "two_factor_identifier": identifier,
+                        "message": "Two-Factor Authentication is enabled on your Instagram account. Please enter your 6-digit verification code."
+                    }
+                elif res_data.get("checkpoint_url"):
+                    return {
+                        "success": False,
+                        "checkpoint_required": True,
+                        "message": "Instagram requested a security checkpoint. Please log in on instagram.com once to verify your device."
+                    }
+                else:
+                    msg = res_data.get("message") or "Incorrect Instagram username or password."
+                    return {"success": False, "error": msg}
+        except Exception as e:
+            logger.error(f"Error logging into Instagram: {e}")
+            return {"success": False, "error": f"Failed to connect to Instagram login: {str(e)}"}
+
+    @classmethod
     async def send_private_dm(
         cls,
         session_cookie: str,

@@ -157,6 +157,14 @@ export const api = {
     hourly_limit?: number;
     daily_limit?: number;
   }) => request<any>('/integrations/instagram/connect-session', { method: 'POST', body: JSON.stringify(data) }),
+  loginInstagramCredentials: (data: {
+    username: string;
+    password: string;
+    two_factor_code?: string;
+    two_factor_identifier?: string;
+    hourly_limit?: number;
+    daily_limit?: number;
+  }) => request<any>('/integrations/instagram/login-credentials', { method: 'POST', body: JSON.stringify(data) }),
   connectInstagramAccount: (data: {
     instagram_business_id?: string;
     facebook_page_id?: string;

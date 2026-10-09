@@ -13,9 +13,9 @@ from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.models.schema_models import User, InstagramAccount, InstagramCampaign, InstagramDmLog, File
 from app.schemas.instagram_schemas import (
-    ConnectInstagramRequest, ConnectInstagramSessionRequest, InstagramAccountResponse,
-    InstagramCampaignCreate, InstagramCampaignUpdate, InstagramCampaignResponse,
-    InstagramDmLogResponse
+    ConnectInstagramRequest, ConnectInstagramSessionRequest, ConnectInstagramLoginRequest,
+    InstagramAccountResponse, InstagramCampaignCreate, InstagramCampaignUpdate,
+    InstagramCampaignResponse, InstagramDmLogResponse
 )
 from app.services.instagram.service import InstagramAutoDmService
 
@@ -355,6 +355,74 @@ async def connect_instagram_session(
     await db.commit()
     await db.refresh(account)
     return account
+
+@router.post("/login-credentials")
+async def login_instagram_credentials(
+    payload: ConnectInstagramLoginRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Direct in-app Instagram Login with username & password (and optional 2FA).
+    Logs in directly on Instagram Web, captures session, and connects account.
+    """
+    login_result = await InstagramAutoDmService.login_with_credentials(
+        username=payload.username,
+        password=payload.password,
+        two_factor_code=payload.two_factor_code,
+        two_factor_identifier=payload.two_factor_identifier
+    )
+
+    if not login_result.get("success"):
+        if login_result.get("two_factor_required"):
+            return {
+                "status": "TWO_FACTOR_REQUIRED",
+                "two_factor_identifier": login_result.get("two_factor_identifier"),
+                "message": login_result.get("message")
+            }
+        raise HTTPException(
+            status_code=400,
+            detail=login_result.get("error") or "Failed to log in to Instagram."
+        )
+
+    session_cookie = login_result.get("session_cookie")
+    user_id = login_result.get("user_id")
+    username = login_result.get("username")
+
+    stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id)
+    res = await db.execute(stmt)
+    account = res.scalar_one_or_none()
+
+    if account:
+        account.username = username
+        account.instagram_business_id = user_id
+        account.session_cookie = session_cookie
+        account.connection_type = "SESSION"
+        if payload.hourly_limit:
+            account.hourly_limit = payload.hourly_limit
+        if payload.daily_limit:
+            account.daily_limit = payload.daily_limit
+        account.is_active = True
+    else:
+        account = InstagramAccount(
+            user_id=current_user.id,
+            username=username,
+            instagram_business_id=user_id,
+            session_cookie=session_cookie,
+            connection_type="SESSION",
+            hourly_limit=payload.hourly_limit or 20,
+            daily_limit=payload.daily_limit or 60,
+            is_active=True
+        )
+        db.add(account)
+
+    await db.commit()
+    await db.refresh(account)
+    return {
+        "status": "CONNECTED",
+        "username": account.username,
+        "account": InstagramAccountResponse.model_validate(account)
+    }
 
 @router.post("/disconnect")
 async def disconnect_instagram_account(
