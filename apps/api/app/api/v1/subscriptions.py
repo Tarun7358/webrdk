@@ -27,7 +27,8 @@ DEFAULT_PLANS = [
             "10 GB Free Storage Quota",
             "Monetized downloads & video views",
             "High-speed Google Drive CDN edge",
-            "Standard payouts via UPI"
+            "Direct payouts via UPI",
+            "Direct cloud stream playback"
         ]
     },
     {

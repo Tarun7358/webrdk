@@ -49,7 +49,8 @@ export const PremiumPage: React.FC = () => {
         "10 GB Free Storage Quota",
         "Standard high-speed downloads",
         "Automated creator monetization",
-        "Direct payouts via UPI"
+        "Direct payouts via UPI",
+        "Direct cloud stream playback"
       ]
     },
     {
@@ -211,6 +212,13 @@ export const PremiumPage: React.FC = () => {
 
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(upiUri)}`;
 
+  const formatFileLimit = (mb: number) => {
+    if (mb >= 1000) {
+      return `${(mb / 1000).toFixed(0)} GB/file`;
+    }
+    return `${mb} MB/file`;
+  };
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto animate-in fade-in duration-300 pb-16">
       {/* Back Button */}
@@ -245,7 +253,7 @@ export const PremiumPage: React.FC = () => {
       </div>
 
       {/* Pricing Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-3 items-stretch">
         {plans.map((p) => {
           const isFeatured = p.tier === 'PRO_GAMER';
           const isCreator = p.tier === 'CREATOR_STUDIO';
@@ -254,23 +262,23 @@ export const PremiumPage: React.FC = () => {
           return (
             <div
               key={p.tier}
-              className={`glass-panel p-8 sm:p-9 rounded-3xl border flex flex-col justify-between relative transition-all duration-300 ${
+              className={`p-7 sm:p-8 rounded-3xl border flex flex-col justify-between relative transition-all duration-300 h-full ${
                 isFeatured
-                  ? 'border-rose-500 bg-[#131127] shadow-[0_0_35px_rgba(244,63,94,0.25)] scale-[1.03] z-10 ring-1 ring-rose-500/50'
+                  ? 'border-rose-500/70 bg-[#120f26] shadow-[0_0_35px_rgba(244,63,94,0.18)] ring-1 ring-rose-500/40'
                   : isCreator
-                  ? 'border-indigo-500/40 bg-gradient-to-b from-[#16122d] to-[#0c0a1a]'
-                  : 'border-white/10 bg-white/[0.015] hover:border-white/20'
+                  ? 'border-indigo-500/50 bg-[#120f26] shadow-[0_0_35px_rgba(99,102,241,0.15)] ring-1 ring-indigo-500/30'
+                  : 'border-white/10 bg-[#0f172a]/70 hover:border-white/20'
               }`}
             >
               {isFeatured && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 bg-gradient-to-r from-rose-600 to-amber-500 text-white font-extrabold text-[10px] uppercase rounded-full tracking-widest shadow-md flex items-center gap-1">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 bg-gradient-to-r from-rose-600 to-amber-500 text-white font-extrabold text-[10px] uppercase rounded-full tracking-wider shadow-md flex items-center gap-1 whitespace-nowrap">
                   <Sparkles className="w-3 h-3" />
                   <span>Most Popular &bull; Pro Gamer</span>
                 </div>
               )}
 
               {isCreator && (
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-4 py-1 bg-indigo-600 text-white font-extrabold text-[10px] uppercase rounded-full tracking-widest shadow-md flex items-center gap-1">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-extrabold text-[10px] uppercase rounded-full tracking-wider shadow-md flex items-center gap-1 whitespace-nowrap">
                   <Crown className="w-3 h-3" />
                   <span>Maximum Power</span>
                 </div>
@@ -287,19 +295,19 @@ export const PremiumPage: React.FC = () => {
                   <span className="text-4xl sm:text-5xl font-black text-white font-mono tracking-tight">
                     ₹{p.price}
                   </span>
-                  <span className="text-xs text-gray-400 font-mono">/month</span>
+                  <span className="text-xs text-slate-400 font-mono">/month</span>
                 </div>
 
-                <div className="text-xs text-gray-400 mt-2 font-mono flex items-center gap-2">
+                <div className="text-xs text-slate-400 mt-2 font-mono flex items-center gap-2">
                   <span className="text-rose-400 font-bold">{p.storage_gb} GB Storage</span>
                   <span>&bull;</span>
-                  <span>Max {p.max_file_mb} MB/file</span>
+                  <span>Max {formatFileLimit(p.max_file_mb)}</span>
                 </div>
 
                 {/* Features List */}
                 <div className="mt-8 pt-6 border-t border-white/10 space-y-3.5">
                   {p.features.map((f: string, i: number) => (
-                    <div key={i} className="flex items-start gap-3 text-xs text-gray-300">
+                    <div key={i} className="flex items-start gap-3 text-xs text-slate-300">
                       <div className="w-4 h-4 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
                         <Check className="w-3 h-3" />
                       </div>
@@ -313,17 +321,28 @@ export const PremiumPage: React.FC = () => {
                 {p.price === 0 ? (
                   <button
                     disabled
-                    className="w-full py-3.5 rounded-2xl font-bold text-xs bg-white/5 border border-white/10 text-slate-400 cursor-default"
+                    className={`w-full py-3.5 rounded-2xl font-bold text-xs transition-colors flex items-center justify-center gap-1.5 cursor-default ${
+                      isCurrentPlan
+                        ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                        : 'bg-white/5 border border-white/10 text-slate-400'
+                    }`}
                   >
-                    {isCurrentPlan ? '✓ Your Active Tier (10 GB Free)' : 'Default Starter (10 GB Free)'}
+                    {isCurrentPlan ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Your Active Tier (10 GB Free)</span>
+                      </>
+                    ) : (
+                      <span>Default Starter (10 GB Free)</span>
+                    )}
                   </button>
                 ) : (
                   <button
                     onClick={() => handleOpenPayment(p)}
-                    className={`w-full py-3.5 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                    className={`w-full py-3.5 rounded-2xl font-extrabold text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-[0.98] ${
                       isFeatured
-                        ? 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white shadow-lg shadow-rose-600/30 active:scale-95'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30 active:scale-95'
+                        ? 'bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white shadow-rose-600/30'
+                        : 'bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white shadow-indigo-600/30'
                     }`}
                   >
                     <QrCode className="w-4 h-4" />
@@ -384,12 +403,12 @@ export const PremiumPage: React.FC = () => {
       )}
 
       {/* Trust & Guarantee Banner */}
-      <div className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400 text-center sm:text-left">
-        <div className="flex items-center gap-3">
-          <ShieldCheck className="w-6 h-6 text-emerald-400 shrink-0" />
-          <span>Manual bank verification ensures 100% security &bull; Approvals processed with confirmation sent to your email.</span>
+      <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/60 border border-white/10 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-300 text-center sm:text-left">
+        <div className="flex items-center gap-2.5">
+          <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0" />
+          <span>Manual bank verification ensures 100% security &bull; Upgrades processed with confirmation sent to your email.</span>
         </div>
-        <span className="font-mono text-gray-500">Official Support: support@ragefps.in</span>
+        <span className="font-mono text-slate-400 text-[11px]">Official Support: support@ragefps.in</span>
       </div>
 
       {/* QR Code Payment Modal */}
