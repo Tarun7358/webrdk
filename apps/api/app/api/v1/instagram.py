@@ -24,13 +24,24 @@ logger = logging.getLogger("rage.api.instagram")
 router = APIRouter(prefix="/integrations/instagram", tags=["Instagram Auto-DM"])
 
 VERIFY_TOKEN = "rage_cloud_meta_webhook_secret_2026"
+IS_INSTAGRAM_LOCKED = True
+
+async def require_instagram_access(current_user: User = Depends(get_current_user)) -> User:
+    if IS_INSTAGRAM_LOCKED:
+        is_admin = current_user.role in ["OWNER", "SUPER_ADMIN"] or current_user.email == "rdxyzprvt@gmail.com"
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Instagram Auto-DM feature is temporarily locked for scheduled maintenance."
+            )
+    return current_user
 
 # ----------------- Meta 1-Click OAuth Handlers (Superprofile Flow) -----------------
 
 @router.get("/oauth/login-url")
 async def get_instagram_oauth_login_url(
     return_to: Optional[str] = Query(None),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_instagram_access)
 ):
     """
     Generates Meta OAuth dialog URL for 1-Click Instagram connection like Superprofile.
@@ -259,7 +270,7 @@ async def receive_webhook(request: Request, db: AsyncSession = Depends(get_db)):
 
 @router.get("/account", response_model=Optional[InstagramAccountResponse])
 async def get_instagram_account(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id)
@@ -270,7 +281,7 @@ async def get_instagram_account(
 @router.post("/connect", response_model=InstagramAccountResponse)
 async def connect_instagram_account(
     payload: ConnectInstagramRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id)
@@ -307,7 +318,7 @@ async def connect_instagram_account(
 @router.post("/connect-session", response_model=InstagramAccountResponse)
 async def connect_instagram_session(
     payload: ConnectInstagramSessionRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -359,7 +370,7 @@ async def connect_instagram_session(
 @router.post("/login-credentials")
 async def login_instagram_credentials(
     payload: ConnectInstagramLoginRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -426,7 +437,7 @@ async def login_instagram_credentials(
 
 @router.post("/disconnect")
 async def disconnect_instagram_account(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id)
@@ -440,7 +451,7 @@ async def disconnect_instagram_account(
 @router.put("/limits", response_model=InstagramAccountResponse)
 async def update_instagram_limits(
     payload: UpdateInstagramLimitsRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -463,7 +474,7 @@ async def update_instagram_limits(
 
 @router.get("/campaigns", response_model=List[InstagramCampaignResponse])
 async def list_campaigns(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramCampaign, File.name).outerjoin(
@@ -503,7 +514,7 @@ async def list_campaigns(
 @router.post("/campaigns", response_model=InstagramCampaignResponse)
 async def create_campaign(
     payload: InstagramCampaignCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     # Verify account exists
@@ -559,7 +570,7 @@ async def create_campaign(
 async def update_campaign(
     campaign_id: str,
     payload: InstagramCampaignUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramCampaign, File.name).outerjoin(
@@ -614,7 +625,7 @@ async def update_campaign(
 @router.post("/campaigns/{campaign_id}/scan")
 async def scan_campaign_comments(
     campaign_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -632,7 +643,7 @@ async def scan_campaign_comments(
 
 @router.get("/media")
 async def list_my_instagram_media(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     """Recent posts/reels of the connected account, for the post picker grid."""
@@ -646,7 +657,7 @@ async def list_my_instagram_media(
 @router.delete("/campaigns/{campaign_id}")
 async def delete_campaign(
     campaign_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramCampaign).where(InstagramCampaign.id == campaign_id, InstagramCampaign.user_id == current_user.id)
@@ -663,7 +674,7 @@ async def delete_campaign(
 async def list_campaign_logs(
     campaign_id: Optional[str] = Query(None),
     limit: int = Query(50, le=100),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_instagram_access),
     db: AsyncSession = Depends(get_db)
 ):
     stmt = select(InstagramDmLog).join(

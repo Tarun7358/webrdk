@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import {
   MessageSquare,
@@ -89,6 +91,15 @@ interface InstagramDmLog {
 }
 
 export const InstagramAutoDmPage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const isPrivileged = Boolean(
+    user?.role === 'OWNER' ||
+    user?.role === 'SUPER_ADMIN' ||
+    user?.email === 'rdxyzprvt@gmail.com'
+  );
+  const [adminPreviewLocked, setAdminPreviewLocked] = useState(false);
+
   const [account, setAccount] = useState<InstagramAccount | null>(null);
   const [campaigns, setCampaigns] = useState<InstagramCampaign[]>([]);
   const [logs, setLogs] = useState<InstagramDmLog[]>([]);
@@ -264,14 +275,19 @@ export const InstagramAutoDmPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (!isPrivileged) {
+      setIsLoading(false);
+      return;
+    }
     fetchData();
-  }, [fetchData]);
+  }, [fetchData, isPrivileged]);
 
   useEffect(() => {
+    if (!isPrivileged) return;
     if (activeTab === 'logs') {
       fetchLogs();
     }
-  }, [activeTab, fetchLogs]);
+  }, [activeTab, fetchLogs, isPrivileged]);
 
   // Handle in-app Instagram Login (auto-captures session, no cookie copy needed)
   const handleInstagramLogin = async (e: React.FormEvent) => {
@@ -617,6 +633,104 @@ export const InstagramAutoDmPage: React.FC = () => {
     setTimeout(() => setCopiedText(null), 2000);
   };
 
+  // Locked Feature Guard for standard users or admin preview
+  if (!isPrivileged || adminPreviewLocked) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="w-full max-w-xl p-8 sm:p-10 rounded-3xl bg-[#0d1424]/90 border border-white/10 backdrop-blur-2xl shadow-2xl relative overflow-hidden text-center space-y-6">
+          {/* Subtle Ambient Glows */}
+          <div className="absolute -top-24 -left-24 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Admin Mode Controls */}
+          {isPrivileged && (
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span>Admin Preview Mode Active</span>
+              <button
+                onClick={() => setAdminPreviewLocked(false)}
+                className="underline hover:text-white transition-colors ml-1 font-bold text-amber-200"
+              >
+                Exit Preview & Open Tool
+              </button>
+            </div>
+          )}
+
+          {/* Icon Badge */}
+          <div className="relative mx-auto w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500/20 via-rose-500/15 to-purple-500/20 border border-amber-500/30 flex items-center justify-center shadow-xl shadow-amber-500/10">
+            <Lock className="w-10 h-10 text-amber-400" />
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-slate-900 border border-amber-500/40 flex items-center justify-center shadow-md">
+              <InstagramIcon className="w-4 h-4 text-pink-400" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-bold uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+              <span>Feature Temporarily Locked</span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight">
+              Instagram Auto-DM Engine
+            </h1>
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
+              This feature is temporarily locked for all users while our engineering team performs core infrastructure upgrades, rate-limit calibrations, and anti-ban enhancements.
+            </p>
+          </div>
+
+          {/* Feature Information Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-left pt-2">
+            <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
+              <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                <span>Account Safe</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                Connected accounts and configurations remain safe and intact.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
+              <div className="flex items-center gap-1.5 text-rose-400 font-bold text-xs">
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Engine Upgrade</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                Deploying faster DM dispatch and anti-spam protection.
+              </p>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
+              <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs">
+                <Clock className="w-3.5 h-3.5" />
+                <span>Returning Soon</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                Access will be re-enabled for all members once updates conclude.
+              </p>
+            </div>
+          </div>
+
+          {/* Action Navigation */}
+          <div className="pt-3 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white font-semibold text-xs tracking-wide shadow-lg shadow-rose-600/25 transition-all hover:scale-105 active:scale-95 flex items-center justify-center gap-2"
+            >
+              <span>Back to Dashboard</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => navigate('/files')}
+              className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-slate-900 border border-white/10 hover:border-white/20 text-slate-300 hover:text-white font-semibold text-xs transition-all flex items-center justify-center gap-2"
+            >
+              <span>Go to My Vault</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <div className="py-24 text-center space-y-3">
@@ -628,6 +742,29 @@ export const InstagramAutoDmPage: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
+      {/* Administrator Maintenance Notice */}
+      {isPrivileged && (
+        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+            <div>
+              <div className="font-bold text-amber-200">Public Maintenance Lock Active</div>
+              <div className="text-[11px] text-amber-300/80">
+                Instagram Auto-DM is currently locked for all standard users. You have administrator bypass privileges.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => setAdminPreviewLocked(true)}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold text-[11px] transition-all shrink-0 self-start sm:self-center"
+          >
+            Preview Public Lock Screen
+          </button>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
