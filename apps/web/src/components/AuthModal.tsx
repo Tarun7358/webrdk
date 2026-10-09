@@ -22,9 +22,7 @@ export const AuthModal: React.FC = () => {
     authModalOptions, 
     closeAuthModal, 
     login, 
-    register, 
-    openLoginModal, 
-    openRegisterModal 
+    register
   } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot' | 'reset'>('login');
@@ -130,6 +128,7 @@ export const AuthModal: React.FC = () => {
 
         {/* Close Button */}
         <button
+          type="button"
           onClick={closeAuthModal}
           className="absolute top-4 right-4 rounded-full p-2 text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
           aria-label="Close modal"
@@ -169,7 +168,6 @@ export const AuthModal: React.FC = () => {
                 setActiveTab('login');
                 setError(null);
                 setSuccessMsg(null);
-                openLoginModal();
               }}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === 'login'
@@ -185,7 +183,6 @@ export const AuthModal: React.FC = () => {
                 setActiveTab('register');
                 setError(null);
                 setSuccessMsg(null);
-                openRegisterModal();
               }}
               className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
                 activeTab === 'register'

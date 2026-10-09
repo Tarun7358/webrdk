@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import type { User } from '../types';
 import { api } from '../services/api';
 
@@ -37,23 +37,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [authModalTab, setAuthModalTab] = useState<'login' | 'register'>('login');
   const [authModalOptions, setAuthModalOptions] = useState<AuthModalOptions>({});
 
-  const openLoginModal = (options?: Partial<AuthModalOptions>) => {
+  const openLoginModal = useCallback((options?: Partial<AuthModalOptions>) => {
     setAuthModalTab('login');
     setAuthModalOptions(options || {});
     setIsAuthModalOpen(true);
-  };
+  }, []);
 
-  const openRegisterModal = (options?: Partial<AuthModalOptions>) => {
+  const openRegisterModal = useCallback((options?: Partial<AuthModalOptions>) => {
     setAuthModalTab('register');
     setAuthModalOptions(options || {});
     setIsAuthModalOpen(true);
-  };
+  }, []);
 
-  const closeAuthModal = () => {
+  const closeAuthModal = useCallback(() => {
     setIsAuthModalOpen(false);
-  };
+  }, []);
 
-  const refreshUser = async () => {
+  const refreshUser = useCallback(async () => {
     if (!localStorage.getItem('rage_token')) {
       setUser(null);
       setIsLoading(false);
@@ -70,13 +70,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     refreshUser();
-  }, []);
+  }, [refreshUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     const res = await api.login({ email, password });
     localStorage.setItem('rage_token', res.access_token);
     localStorage.setItem('rage_refresh', res.refresh_token);
@@ -86,9 +86,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (authModalOptions.onSuccess) {
       authModalOptions.onSuccess();
     }
-  };
+  }, [authModalOptions]);
 
-  const register = async (email: string, password: string, fullName: string, referralCode?: string) => {
+  const register = useCallback(async (email: string, password: string, fullName: string, referralCode?: string) => {
     const res = await api.register({
       email,
       password,
@@ -103,33 +103,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (authModalOptions.onSuccess) {
       authModalOptions.onSuccess();
     }
-  };
+  }, [authModalOptions]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     localStorage.removeItem('rage_token');
     localStorage.removeItem('rage_refresh');
     setUser(null);
     setToken(null);
-  };
+  }, []);
+
+  const value = useMemo(() => ({
+    user,
+    token,
+    isLoading,
+    login,
+    register,
+    logout,
+    refreshUser,
+    isAuthModalOpen,
+    authModalTab,
+    authModalOptions,
+    openLoginModal,
+    openRegisterModal,
+    closeAuthModal
+  }), [
+    user,
+    token,
+    isLoading,
+    login,
+    register,
+    logout,
+    refreshUser,
+    isAuthModalOpen,
+    authModalTab,
+    authModalOptions,
+    openLoginModal,
+    openRegisterModal,
+    closeAuthModal
+  ]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        isLoading,
-        login,
-        register,
-        logout,
-        refreshUser,
-        isAuthModalOpen,
-        authModalTab,
-        authModalOptions,
-        openLoginModal,
-        openRegisterModal,
-        closeAuthModal
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
