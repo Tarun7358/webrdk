@@ -87,7 +87,7 @@ export const AuthModal: React.FC = () => {
           throw new Error('Please enter your email address');
         }
         await api.forgotPassword(email.trim());
-        setSuccessMsg(`A 6-digit OTP code has been dispatched to ${email.trim()} via GoDaddy Mail.`);
+        setSuccessMsg(`A 6-digit OTP code has been dispatched to ${email.trim()}. Please check your Inbox and Spam/Junk folder.`);
         setActiveTab('reset');
       } else if (activeTab === 'reset') {
         if (!otpCode.trim() || otpCode.trim().length < 4) {
@@ -342,9 +342,31 @@ export const AuthModal: React.FC = () => {
           {activeTab === 'reset' && (
             <>
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  6-Digit OTP Verification Code
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-medium text-slate-300">
+                    6-Digit OTP Verification Code
+                  </label>
+                  <button
+                    type="button"
+                    disabled={loading}
+                    onClick={async () => {
+                      if (!email.trim()) return;
+                      setLoading(true);
+                      setError(null);
+                      try {
+                        await api.forgotPassword(email.trim());
+                        setSuccessMsg(`A fresh 6-digit OTP code has been dispatched to ${email.trim()}. Please check your Inbox and Spam folder.`);
+                      } catch (e: any) {
+                        setError(e.message || 'Failed to resend verification OTP.');
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    className="text-xs text-rose-400 hover:text-rose-300 transition-colors font-medium cursor-pointer disabled:opacity-50"
+                  >
+                    Resend Code
+                  </button>
+                </div>
                 <div className="relative">
                   <KeyRound className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-rose-400" />
                   <input

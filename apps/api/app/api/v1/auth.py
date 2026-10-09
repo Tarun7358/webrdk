@@ -101,27 +101,46 @@ async def forgot_password(
     req: ForgotPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
-    stmt = select(User).where(User.email == req.email.lower())
+    clean_email = req.email.strip().lower()
+    stmt = select(User).where(func.lower(User.email) == clean_email)
     res = await db.execute(stmt)
     user = res.scalar_one_or_none()
 
-    if user and user.is_active:
-        otp_code = f"{secrets.randbelow(900000) + 100000}"
-        otp_record = PasswordResetOTP(
-            email=user.email,
-            otp_code=otp_code,
-            expires_at=datetime.utcnow() + timedelta(minutes=15),
-            is_used=False
-        )
-        db.add(otp_record)
-        await db.commit()
+    if not user:
+        # Prevent email enumeration while returning clean confirmation
+        return {
+            "status": "success",
+            "message": "If an account exists with this email address, a 6-digit password reset code has been sent."
+        }
 
-        # Dispatch OTP verification email via GoDaddy SMTP
-        asyncio.create_task(EmailService.send_otp_email(user.email, otp_code))
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account is currently inactive or suspended. Please contact platform administration."
+        )
+
+    otp_code = f"{secrets.randbelow(900000) + 100000}"
+    otp_record = PasswordResetOTP(
+        email=clean_email,
+        otp_code=otp_code,
+        expires_at=datetime.utcnow() + timedelta(minutes=15),
+        is_used=False
+    )
+    db.add(otp_record)
+    await db.commit()
+
+    # Dispatch OTP verification email via GoDaddy SMTP (supports 465 SSL and 587 STARTTLS)
+    email_sent = await EmailService.send_otp_email(user.email, otp_code)
+    if not email_sent:
+        logger.error(f"Failed to dispatch password reset OTP email to {user.email}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Unable to dispatch verification email via mail server. Please try again in a few moments."
+        )
 
     return {
         "status": "success",
-        "message": "If an account exists with this email address, a 6-digit password reset code has been sent."
+        "message": f"A 6-digit password reset code has been dispatched to {user.email}."
     }
 
 @router.post("/reset-password")
@@ -129,11 +148,20 @@ async def reset_password(
     req: ResetPasswordRequest,
     db: AsyncSession = Depends(get_db)
 ):
+    clean_email = req.email.strip().lower()
+    clean_code = req.otp_code.strip()
+
+    if len(req.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must be at least 8 characters long."
+        )
+
     stmt = (
         select(PasswordResetOTP)
         .where(
-            PasswordResetOTP.email == req.email.lower(),
-            PasswordResetOTP.otp_code == req.otp_code.strip(),
+            func.lower(PasswordResetOTP.email) == clean_email,
+            PasswordResetOTP.otp_code == clean_code,
             PasswordResetOTP.is_used == False,
             PasswordResetOTP.expires_at > datetime.utcnow()
         )
@@ -149,7 +177,7 @@ async def reset_password(
         )
 
     # Find the user
-    user_stmt = select(User).where(User.email == req.email.lower())
+    user_stmt = select(User).where(func.lower(User.email) == clean_email)
     user_res = await db.execute(user_stmt)
     user = user_res.scalar_one_or_none()
 

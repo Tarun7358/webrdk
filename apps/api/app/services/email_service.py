@@ -11,27 +11,60 @@ logger = logging.getLogger("rage.email")
 class EmailService:
     @staticmethod
     def _send_smtp(to_email: str, subject: str, html_content: str, text_content: str = "") -> bool:
-        """Synchronous SMTP sender connected to GoDaddy SSL port 465"""
+        """Synchronous SMTP sender with dual-port fallback (465 SSL and 587 STARTTLS)"""
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
+        msg["To"] = to_email
+
+        if text_content:
+            msg.attach(MIMEText(text_content, "plain", "utf-8"))
+        if html_content:
+            msg.attach(MIMEText(html_content, "html", "utf-8"))
+
+        raw_msg = msg.as_string()
+        primary_port = int(settings.SMTP_PORT)
+        fallback_port = 587 if primary_port == 465 else 465
+
+        # Attempt 1: Primary Port
         try:
-            msg = MIMEMultipart("alternative")
-            msg["Subject"] = subject
-            msg["From"] = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
-            msg["To"] = to_email
-
-            if text_content:
-                msg.attach(MIMEText(text_content, "plain", "utf-8"))
-            if html_content:
-                msg.attach(MIMEText(html_content, "html", "utf-8"))
-
             context = ssl.create_default_context()
-            with smtplib.SMTP_SSL(settings.SMTP_HOST, settings.SMTP_PORT, context=context, timeout=20) as server:
-                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
-                server.sendmail(settings.SMTP_FROM_EMAIL, [to_email], msg.as_string())
+            if primary_port == 465:
+                with smtplib.SMTP_SSL(settings.SMTP_HOST, primary_port, context=context, timeout=12) as server:
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                    server.sendmail(settings.SMTP_FROM_EMAIL, [to_email], raw_msg)
+            else:
+                with smtplib.SMTP(settings.SMTP_HOST, primary_port, timeout=12) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                    server.sendmail(settings.SMTP_FROM_EMAIL, [to_email], raw_msg)
 
-            logger.info(f"Email sent successfully to {to_email} with subject '{subject}'")
+            logger.info(f"Email sent successfully to {to_email} via port {primary_port} with subject '{subject}'")
             return True
-        except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {e}")
+        except Exception as err1:
+            logger.warning(f"Primary SMTP attempt on port {primary_port} failed ({err1}). Retrying on fallback port {fallback_port}...")
+
+        # Attempt 2: Fallback Port
+        try:
+            context = ssl.create_default_context()
+            if fallback_port == 465:
+                with smtplib.SMTP_SSL(settings.SMTP_HOST, fallback_port, context=context, timeout=12) as server:
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                    server.sendmail(settings.SMTP_FROM_EMAIL, [to_email], raw_msg)
+            else:
+                with smtplib.SMTP(settings.SMTP_HOST, fallback_port, timeout=12) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
+                    server.sendmail(settings.SMTP_FROM_EMAIL, [to_email], raw_msg)
+
+            logger.info(f"Email sent successfully to {to_email} via fallback port {fallback_port} with subject '{subject}'")
+            return True
+        except Exception as err2:
+            logger.error(f"Failed to send email to {to_email} on both ports {primary_port} and {fallback_port}: {err2}")
             return False
 
     @classmethod
@@ -115,7 +148,7 @@ class EmailService:
         await cls.send_email_async(to_email, subject, html)
 
     @classmethod
-    async def send_otp_email(cls, to_email: str, otp_code: str):
+    async def send_otp_email(cls, to_email: str, otp_code: str) -> bool:
         """Sends 6-digit OTP verification email for Password Reset"""
         subject = f"{otp_code} is your RAGE CLOUD Password Reset Code"
         html = f"""<!DOCTYPE html>
@@ -152,7 +185,7 @@ class EmailService:
   </div>
 </body>
 </html>"""
-        await cls.send_email_async(to_email, subject, html)
+        return await cls.send_email_async(to_email, subject, html)
 
     @classmethod
     async def send_subscription_approved_email(cls, to_email: str, user_name: str, plan_name: str, storage_gb: int):
