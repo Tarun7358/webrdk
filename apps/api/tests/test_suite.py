@@ -182,3 +182,156 @@ async def test_file_unlimited_share_and_reset(async_session: AsyncSession):
     assert share.expires_at is None  # Remains unlimited
     assert share.download_limit is None  # Remains unlimited
 
+@pytest.mark.asyncio
+async def test_instagram_keyword_matching_and_opt_out():
+    from app.services.instagram.service import InstagramAutoDmService
+
+    # 1. Test keyword matching
+    keywords = "ob55, apk, download, link"
+    assert InstagramAutoDmService.matches_keywords("send me OB55 please", keywords) is True
+    assert InstagramAutoDmService.matches_keywords("where is the apk?", keywords) is True
+    assert InstagramAutoDmService.matches_keywords("link please bro", keywords) is True
+    assert InstagramAutoDmService.matches_keywords("just saying hello cool video", keywords) is False
+
+    # 2. Test Opt-Out detection
+    assert InstagramAutoDmService.is_opt_out("STOP") is True
+    assert InstagramAutoDmService.is_opt_out("please unsubscribe me") is True
+    assert InstagramAutoDmService.is_opt_out("can you cancel this") is True
+    assert InstagramAutoDmService.is_opt_out("can't stop playing this game!") is False
+
+@pytest.mark.asyncio
+async def test_instagram_spintax_rotation_and_personalization():
+    import json
+    from app.services.instagram.service import InstagramAutoDmService
+
+    templates = [
+        "Hey @{username}! Here is your link for {file_name}: {download_link}",
+        "Hello {username}, link ready: {download_link} 🚀",
+        "Thanks for commenting! Download {file_name} here: {download_link} 🔥"
+    ]
+    templates_json = json.dumps(templates)
+
+    # Render multiple times to verify variables are replaced
+    rendered = InstagramAutoDmService.select_spintax_variant(
+        templates_json,
+        username="gamer_tarun",
+        file_name="ASTUTE_OB55.apk",
+        download_link="https://ragefps.in/d/OB55X"
+    )
+    assert "https://ragefps.in/d/OB55X" in rendered
+    assert "ASTUTE_OB55.apk" in rendered or "gamer_tarun" in rendered
+    assert "{download_link}" not in rendered
+    assert "{file_name}" not in rendered
+
+@pytest.mark.asyncio
+async def test_instagram_deduplication_and_rate_limits(async_session: AsyncSession):
+    import json
+    from app.models.schema_models import InstagramAccount, InstagramCampaign, InstagramDmLog
+    from app.services.instagram.service import InstagramAutoDmService
+
+    # 1. Create creator user, file, and share link
+    creator = User(
+        email="ig_creator@rage.in",
+        password_hash="hash",
+        full_name="IG Influencer",
+        role="CREATOR",
+        referral_code="IGCREATOR1"
+    )
+    async_session.add(creator)
+    await async_session.flush()
+
+    file = File(
+        owner_id=creator.id,
+        name="MOD_SKIN.apk",
+        original_name="MOD_SKIN.apk",
+        mime_type="application/vnd.android.package-archive",
+        extension="apk",
+        size=50000000,
+        checksum="hash123",
+        visibility="PUBLIC",
+        status="ACTIVE"
+    )
+    async_session.add(file)
+    await async_session.flush()
+
+    account = InstagramAccount(
+        user_id=creator.id,
+        instagram_business_id="ig_biz_999",
+        username="rage_streamer",
+        access_token="mock_token_123",
+        daily_limit=2,
+        dms_sent_today=0,
+        is_active=True
+    )
+    async_session.add(account)
+    await async_session.flush()
+
+    campaign = InstagramCampaign(
+        user_id=creator.id,
+        instagram_account_id=account.id,
+        file_id=file.id,
+        title="Skin Pack Drop",
+        trigger_keywords="skin, mod, download",
+        dm_templates_json=json.dumps(["Hey @{username}! Link: {download_link}"]),
+        reply_comments_json=json.dumps(["Sent! 📩"]),
+        send_comment_reply=True,
+        is_active=True
+    )
+    async_session.add(campaign)
+    await async_session.commit()
+
+    # Mock dispatch_meta_dm to simulate success
+    async def mock_dispatch(access_token, recipient_ig_id, message_text):
+        return True, None
+
+    original_dispatch = InstagramAutoDmService.dispatch_meta_dm
+    InstagramAutoDmService.dispatch_meta_dm = mock_dispatch
+
+    try:
+        # Event 1: First comment from @gamer1 -> SENT
+        res1 = await InstagramAutoDmService.process_comment_event(
+            ig_business_id="ig_biz_999",
+            comment_id="cmt_1",
+            comment_text="I want this mod",
+            sender_ig_id="user_101",
+            sender_username="gamer1",
+            session=async_session
+        )
+        assert res1["status"] == "SENT"
+
+        # Event 2: Second comment from SAME user (@gamer1) -> DUPLICATE_SKIPPED
+        res2 = await InstagramAutoDmService.process_comment_event(
+            ig_business_id="ig_biz_999",
+            comment_id="cmt_2",
+            comment_text="please send the mod link again",
+            sender_ig_id="user_101",
+            sender_username="gamer1",
+            session=async_session
+        )
+        assert res2["status"] == "DUPLICATE_SKIPPED"
+
+        # Event 3: Third comment from new user @gamer2 -> SENT (hits daily limit 2)
+        res3 = await InstagramAutoDmService.process_comment_event(
+            ig_business_id="ig_biz_999",
+            comment_id="cmt_3",
+            comment_text="download skin",
+            sender_ig_id="user_102",
+            sender_username="gamer2",
+            session=async_session
+        )
+        assert res3["status"] == "SENT"
+
+        # Event 4: Fourth comment from new user @gamer3 -> RATE_LIMITED (limit was 2)
+        res4 = await InstagramAutoDmService.process_comment_event(
+            ig_business_id="ig_biz_999",
+            comment_id="cmt_4",
+            comment_text="download skin",
+            sender_ig_id="user_103",
+            sender_username="gamer3",
+            session=async_session
+        )
+        assert res4["status"] == "RATE_LIMITED"
+    finally:
+        InstagramAutoDmService.dispatch_meta_dm = original_dispatch
+
+

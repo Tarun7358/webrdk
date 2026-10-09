@@ -14,6 +14,7 @@ import {
   ShieldAlert,
   HardDrive
 } from 'lucide-react';
+import { InstagramIcon } from '../pages/InstagramAutoDmPage';
 
 export const Sidebar: React.FC = () => {
   const { user } = useAuth();
@@ -61,6 +62,7 @@ export const Sidebar: React.FC = () => {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/files', label: 'My Vault', icon: FolderOpen },
     { to: '/upload', label: 'Upload Station', icon: UploadCloud },
+    { to: '/instagram', label: 'Instagram Auto-DM', icon: InstagramIcon },
     { to: '/creator', label: 'Creator Hub', icon: TrendingUp },
     { to: '/wallet', label: 'Wallet & Payouts', icon: Wallet },
     { to: '/teams', label: 'Teams & Orgs', icon: Users },

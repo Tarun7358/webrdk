@@ -308,3 +308,53 @@ class SubscriptionRequest(BaseModel):
     reviewer_id = Column(String(36), ForeignKey("users.id"), nullable=True)
     review_note = Column(Text, nullable=True)
 
+class InstagramAccount(BaseModel):
+    __tablename__ = "instagram_accounts"
+
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, unique=True, index=True)
+    instagram_business_id = Column(String(100), nullable=False)
+    facebook_page_id = Column(String(100), nullable=True)
+    username = Column(String(100), nullable=False)
+    access_token = Column(Text, nullable=False) # Long-lived Meta Graph API token
+    hourly_limit = Column(Integer, default=30, nullable=False)
+    daily_limit = Column(Integer, default=100, nullable=False)
+    dms_sent_today = Column(Integer, default=0, nullable=False)
+    last_reset_date = Column(String(20), nullable=True) # YYYY-MM-DD
+    is_active = Column(Boolean, default=True, nullable=False)
+
+    user = relationship("User", backref="instagram_account")
+    campaigns = relationship("InstagramCampaign", back_populates="account", cascade="all, delete-orphan")
+
+class InstagramCampaign(BaseModel):
+    __tablename__ = "instagram_campaigns"
+
+    user_id = Column(String(36), ForeignKey("users.id"), nullable=False, index=True)
+    instagram_account_id = Column(String(36), ForeignKey("instagram_accounts.id"), nullable=False, index=True)
+    file_id = Column(String(36), ForeignKey("files.id"), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    trigger_keywords = Column(Text, nullable=False) # Comma-separated (e.g., "ob55,apk,download")
+    dm_templates_json = Column(Text, nullable=False) # JSON array of spintax variants
+    reply_comments_json = Column(Text, nullable=True) # JSON array of comment reply variants
+    send_comment_reply = Column(Boolean, default=True, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    total_dms_sent = Column(Integer, default=0, nullable=False)
+
+    account = relationship("InstagramAccount", back_populates="campaigns")
+    file = relationship("File")
+    logs = relationship("InstagramDmLog", back_populates="campaign", cascade="all, delete-orphan")
+
+class InstagramDmLog(BaseModel):
+    __tablename__ = "instagram_dm_logs"
+
+    campaign_id = Column(String(36), ForeignKey("instagram_campaigns.id"), nullable=False, index=True)
+    recipient_ig_id = Column(String(100), nullable=False, index=True)
+    recipient_username = Column(String(100), nullable=True)
+    comment_id = Column(String(100), nullable=True, index=True)
+    comment_text = Column(Text, nullable=True)
+    dm_text_sent = Column(Text, nullable=True)
+    status = Column(String(50), default="SENT", nullable=False, index=True) # SENT, DUPLICATE_SKIPPED, RATE_LIMITED, OPTED_OUT, FAILED
+    error_message = Column(Text, nullable=True)
+
+    campaign = relationship("InstagramCampaign", back_populates="logs")
+
+

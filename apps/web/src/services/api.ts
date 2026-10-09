@@ -144,5 +144,39 @@ export const api = {
     request<any>('/admin/settings', { method: 'PUT', body: JSON.stringify({ settings }) }),
   getFraudAlerts: () => request<any>('/admin/fraud-alerts'),
   getAuditLogs: () => request<any>('/admin/audit-logs'),
+
+  // Instagram Auto-DM
+  getInstagramAccount: () => request<any>('/integrations/instagram/account'),
+  connectInstagramAccount: (data: {
+    instagram_business_id: string;
+    facebook_page_id?: string;
+    username: string;
+    access_token: string;
+    hourly_limit?: number;
+    daily_limit?: number;
+  }) => request<any>('/integrations/instagram/connect', { method: 'POST', body: JSON.stringify(data) }),
+  disconnectInstagramAccount: () => request<any>('/integrations/instagram/disconnect', { method: 'POST' }),
+  getInstagramCampaigns: () => request<any>('/integrations/instagram/campaigns'),
+  createInstagramCampaign: (data: {
+    file_id: string;
+    title: string;
+    trigger_keywords: string;
+    dm_templates: string[];
+    reply_comments?: string[];
+    send_comment_reply?: boolean;
+  }) => request<any>('/integrations/instagram/campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  updateInstagramCampaign: (campaignId: string, data: {
+    title?: string;
+    trigger_keywords?: string;
+    dm_templates?: string[];
+    reply_comments?: string[];
+    send_comment_reply?: boolean;
+    is_active?: boolean;
+  }) => request<any>(`/integrations/instagram/campaigns/${campaignId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteInstagramCampaign: (campaignId: string) => request<any>(`/integrations/instagram/campaigns/${campaignId}`, { method: 'DELETE' }),
+  getInstagramLogs: (campaignId?: string, limit: number = 50) => {
+    const q = campaignId ? `?campaign_id=${campaignId}&limit=${limit}` : `?limit=${limit}`;
+    return request<any>(`/integrations/instagram/logs${q}`);
+  },
 };
 

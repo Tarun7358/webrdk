@@ -17,6 +17,7 @@ import { ReferralsPage } from './pages/ReferralsPage';
 import { PremiumPage } from './pages/PremiumPage';
 import { AdminPage } from './pages/AdminPage';
 import { OwnerPage } from './pages/OwnerPage';
+import { InstagramAutoDmPage } from './pages/InstagramAutoDmPage';
 
 export const App: React.FC = () => {
   return (
@@ -36,6 +37,7 @@ export const App: React.FC = () => {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/files" element={<FilesPage />} />
             <Route path="/upload" element={<UploadPage />} />
+            <Route path="/instagram" element={<InstagramAutoDmPage />} />
             <Route path="/creator" element={<CreatorHubPage />} />
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/teams" element={<TeamsPage />} />
