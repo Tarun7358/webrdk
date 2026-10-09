@@ -20,17 +20,36 @@ import {
   ShieldCheck,
   FileText,
   Sliders,
-  Check
+  Check,
+  Trash2
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
   const [files, setFiles] = useState<FileItem[]>([]);
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
   const [editingFile, setEditingFile] = useState<FileItem | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleDelete = async (fileId: string, fileName: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete "${fileName}"?\n\nThis will remove the file from cloud storage, free up your quota, and immediately deactivate its public download links.`)) {
+      return;
+    }
+    try {
+      setDeletingId(fileId);
+      await api.deleteFile(fileId);
+      setFiles((prev) => prev.filter((f) => f.id !== fileId));
+      if (refreshUser) refreshUser();
+      window.dispatchEvent(new CustomEvent('rage-storage-updated'));
+    } catch (err: any) {
+      alert(`Delete failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -304,6 +323,20 @@ export const DashboardPage: React.FC = () => {
                           <Sliders className="w-3 h-3 text-rose-400" />
                           <span>Edit</span>
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(file.id, file.name)}
+                          disabled={deletingId === file.id}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-rose-500/20 text-slate-300 hover:text-rose-400 border border-white/5 hover:border-rose-500/30 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                          title="Delete file permanently from storage and deactivate link"
+                        >
+                          {deletingId === file.id ? (
+                            <div className="w-3 h-3 border-2 border-rose-400/30 border-t-rose-400 rounded-full animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3 text-rose-400" />
+                          )}
+                          <span>{deletingId === file.id ? 'Deleting...' : 'Delete'}</span>
+                        </button>
                         <Link
                           to={`/d/${file.short_code || file.id}`}
                           target="_blank"
@@ -329,6 +362,11 @@ export const DashboardPage: React.FC = () => {
         onClose={() => setEditingFile(null)}
         onUpdated={(updatedFile) => {
           setFiles((prev) => prev.map((f) => (f.id === updatedFile.id ? updatedFile : f)));
+        }}
+        onDeleted={(deletedId) => {
+          setFiles((prev) => prev.filter((f) => f.id !== deletedId));
+          if (refreshUser) refreshUser();
+          setEditingFile(null);
         }}
       />
     </div>

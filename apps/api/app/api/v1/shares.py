@@ -99,7 +99,12 @@ async def get_public_download_page_data(
         File, ShareLink.file_id == File.id
     ).join(
         User, File.owner_id == User.id
-    ).where(ShareLink.short_code == short_code, ShareLink.is_active == True)
+    ).where(
+        ShareLink.short_code == short_code,
+        ShareLink.is_active == True,
+        or_(File.is_deleted == False, File.is_deleted.is_(None)),
+        File.status != "DELETED"
+    )
 
     res = await db.execute(stmt)
     row = res.first()
@@ -223,24 +228,39 @@ async def get_share_preview_html(
     """
     stmt = select(ShareLink, File).join(
         File, ShareLink.file_id == File.id
-    ).where(ShareLink.short_code == short_code, ShareLink.is_active == True)
+    ).where(
+        ShareLink.short_code == short_code,
+        ShareLink.is_active == True,
+        or_(File.is_deleted == False, File.is_deleted.is_(None)),
+        File.status != "DELETED"
+    )
     res = await db.execute(stmt)
     row = res.first()
 
     if not row:
-        stmt_f = select(File).where(File.id == short_code, File.is_deleted == False)
+        stmt_f = select(File).where(
+            File.id == short_code,
+            or_(File.is_deleted == False, File.is_deleted.is_(None)),
+            File.status != "DELETED"
+        )
         res_f = await db.execute(stmt_f)
         f_obj = res_f.scalar_one_or_none()
         if f_obj:
-            sl_stmt = select(ShareLink).where(ShareLink.file_id == f_obj.id, ShareLink.is_active == True).order_by(ShareLink.created_at.desc())
+            sl_stmt = select(ShareLink).where(
+                ShareLink.file_id == f_obj.id,
+                ShareLink.is_active == True
+            ).order_by(ShareLink.created_at.desc())
             sl_res = await db.execute(sl_stmt)
             sl_obj = sl_res.scalars().first()
             if sl_obj:
                 row = (sl_obj, f_obj)
 
-    file_name = row[1].name if row else f"File {short_code}"
-    file_size_mb = f"{(row[1].size / (1024 * 1024)):.2f} MB" if row else "Unknown Size"
-    ext = row[1].extension.upper() if row else "FILE"
+    if not row:
+        raise HTTPException(status_code=404, detail="Shared file not found or has been deleted")
+
+    file_name = row[1].name
+    file_size_mb = f"{(row[1].size / (1024 * 1024)):.2f} MB"
+    ext = row[1].extension.upper()
 
     base_url = str(request.base_url).rstrip("/")
     frontend_origin = "https://rdkcloudservices.netlify.app"

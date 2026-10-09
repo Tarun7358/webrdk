@@ -14,7 +14,8 @@ import {
   Lock,
   Unlock,
   Sparkles,
-  AlertCircle
+  AlertCircle,
+  Trash2
 } from 'lucide-react';
 
 interface EditFileModalProps {
@@ -22,13 +23,15 @@ interface EditFileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdated: (updatedFile: FileItem) => void;
+  onDeleted?: (deletedFileId: string) => void;
 }
 
 export const EditFileModal: React.FC<EditFileModalProps> = ({
   file,
   isOpen,
   onClose,
-  onUpdated
+  onUpdated,
+  onDeleted
 }) => {
   if (!isOpen || !file) return null;
 
@@ -57,9 +60,31 @@ export const EditFileModal: React.FC<EditFileModalProps> = ({
 
   // Status
   const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+
+  const handleDelete = async () => {
+    if (!file) return;
+    if (!window.confirm(`Permanently delete "${file.name}"?\n\nThis will remove the file from cloud storage, free up your quota, and immediately deactivate its public download links.`)) {
+      return;
+    }
+    setIsDeleting(true);
+    setErrorMsg('');
+    try {
+      await api.deleteFile(file.id);
+      window.dispatchEvent(new CustomEvent('rage-storage-updated'));
+      if (onDeleted) {
+        onDeleted(file.id);
+      }
+      onClose();
+    } catch (err: any) {
+      setErrorMsg(`Delete failed: ${err.message || 'Unknown error'}`);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const currentShortCode = file.short_code || file.id;
   const liveShareUrl = `${window.location.origin}/d/${currentShortCode}`;
@@ -503,29 +528,51 @@ export const EditFileModal: React.FC<EditFileModalProps> = ({
           )}
 
           {/* Modal Footer */}
-          <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-white/10">
+          <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-white/10">
             <button
               type="button"
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+              onClick={handleDelete}
+              disabled={isDeleting || isSaving}
+              className="px-3.5 py-2.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/20 text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              title="Permanently delete file from storage and deactivate link"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white text-xs font-bold transition-all shadow-lg shadow-rose-600/25 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-            >
-              {isSaving ? (
+              {isDeleting ? (
                 <>
-                  <div className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                  <span>Saving...</span>
+                  <div className="w-3.5 h-3.5 border-2 border-rose-400/30 border-t-rose-400 rounded-full animate-spin" />
+                  <span>Deleting...</span>
                 </>
               ) : (
-                <span>Save Configuration</span>
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete File</span>
+                </>
               )}
             </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isSaving || isDeleting}
+                className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving || isDeleting}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 text-white text-xs font-bold transition-all shadow-lg shadow-rose-600/25 flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {isSaving ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Configuration</span>
+                )}
+              </button>
+            </div>
           </div>
         </form>
       </div>

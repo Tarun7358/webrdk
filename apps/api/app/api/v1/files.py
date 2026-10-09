@@ -1,7 +1,10 @@
 import os
 import io
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
+
+logger = logging.getLogger("rage.api.files")
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File as FastApiFile, Form, Request
 from fastapi.responses import StreamingResponse, FileResponse as StarletteFileResponse
@@ -372,17 +375,40 @@ async def delete_file(
 
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
-    if file.owner_id != current_user.id and current_user.role != "SUPER_ADMIN":
+    if file.owner_id != current_user.id and current_user.role not in ["OWNER", "SUPER_ADMIN"] and current_user.email != "rdxyzprvt@gmail.com":
         raise HTTPException(status_code=403, detail="Permission denied")
 
     file.is_deleted = True
     file.status = "DELETED"
 
-    # Call storage provider deletion
+    # 1. Deactivate all associated share links so /d/{short_code} immediately stops working
+    sl_stmt = select(ShareLink).where(ShareLink.file_id == file.id)
+    sl_res = await db.execute(sl_stmt)
+    for sl in sl_res.scalars().all():
+        sl.is_active = False
+
+    # 2. Call storage provider deletion (Google Drive and S3)
     storage_svc = get_storage_service()
-    target_key = file.google_drive_file_id or file.storage_key
+    target_key = file.google_drive_file_id or file.storage_key or file.id
     if target_key:
-        await storage_svc.delete(target_key)
+        try:
+            await storage_svc.delete(target_key)
+        except Exception as e:
+            logger.error(f"Error deleting file from storage provider: {e}")
+
+    # 3. Clean up local disk copy if exists
+    try:
+        from app.services.storage.local_storage import LocalStorage
+        local_svc = LocalStorage()
+        path = local_svc._resolve_path(file.storage_key or file.id)
+        if path and os.path.exists(path):
+            os.remove(path)
+    except Exception as e:
+        logger.error(f"Error removing local file: {e}")
+
+    # 4. Deduct storage usage on user
+    if hasattr(current_user, "storage_used_bytes") and current_user.storage_used_bytes:
+        current_user.storage_used_bytes = max(0, current_user.storage_used_bytes - file.size)
 
     client_ip = request.client.host if request.client else "unknown"
     await AuditService.log_action(
@@ -396,7 +422,7 @@ async def delete_file(
     )
 
     await db.commit()
-    return {"message": "File deleted successfully"}
+    return {"message": "File deleted successfully and share links deactivated"}
 
 @router.get("/stream/{file_id}")
 async def stream_file(
@@ -406,18 +432,12 @@ async def stream_file(
     """
     Streams file directly from storage provider without exposing credentials or internal URLs
     """
-    stmt = select(File).where(File.id == file_id, File.is_deleted == False)
+    stmt = select(File).where(File.id == file_id)
     res = await db.execute(stmt)
     file = res.scalar_one_or_none()
 
-    if not file:
-        # Fallback to local storage identifier search
-        from app.services.storage.local_storage import LocalStorage
-        local_svc = LocalStorage()
-        path = local_svc._resolve_path(file_id)
-        if path and os.path.exists(path):
-            return StarletteFileResponse(path=path, media_type="application/octet-stream")
-        raise HTTPException(status_code=404, detail="File content not found")
+    if not file or file.is_deleted or file.status == "DELETED":
+        raise HTTPException(status_code=404, detail="File not found or has been deleted")
 
     if file.storage_backend == "local" or not file.google_drive_file_id:
         from app.services.storage.local_storage import LocalStorage

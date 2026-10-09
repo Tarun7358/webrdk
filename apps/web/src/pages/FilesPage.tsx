@@ -530,6 +530,10 @@ export const FilesPage: React.FC = () => {
         onUpdated={(updatedFile) => {
           setFiles((prev) => prev.map((f) => (f.id === updatedFile.id ? updatedFile : f)));
         }}
+        onDeleted={(deletedId) => {
+          setFiles((prev) => prev.filter((f) => f.id !== deletedId));
+          refreshUser();
+        }}
       />
     </div>
   );
