@@ -618,7 +618,7 @@ async def list_my_instagram_media(
     account = (await db.execute(stmt)).scalar_one_or_none()
     if not account or not account.session_cookie:
         raise HTTPException(status_code=400, detail="Connect your Instagram account first.")
-    media = await InstagramAutoDmService.fetch_user_media(account.session_cookie, account.instagram_business_id or "")
+    media = await InstagramAutoDmService.fetch_user_media(account.session_cookie, account.instagram_business_id or "", username=account.username or "")
     return {"username": account.username, "profile_picture_url": account.profile_picture_url, "media": media}
 
 @router.delete("/campaigns/{campaign_id}")

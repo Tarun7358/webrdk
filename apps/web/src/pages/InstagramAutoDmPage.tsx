@@ -847,8 +847,24 @@ export const InstagramAutoDmPage: React.FC = () => {
                       </button>
                     </div>
 
-                    {/* Reel / Post URL Display */}
-                    {camp.post_url ? (
+                    {/* Target Mode & Link Display */}
+                    {camp.target_mode === 'ANY' ? (
+                      <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Zap className="w-3.5 h-3.5 text-purple-400" />
+                          <span className="text-purple-300 font-medium">Watching: Any Post/Reel (5 latest active)</span>
+                        </div>
+                        <span className="text-[10px] text-purple-400/80 px-2 py-0.5 rounded-full bg-purple-500/20">Auto-Scan</span>
+                      </div>
+                    ) : camp.target_mode === 'NEXT' ? (
+                      <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3.5 h-3.5 text-indigo-400" />
+                          <span className="text-indigo-300 font-medium">Watching: Next Post/Reel (after campaign creation)</span>
+                        </div>
+                        <span className="text-[10px] text-indigo-400/80 px-2 py-0.5 rounded-full bg-indigo-500/20">Future Posts</span>
+                      </div>
+                    ) : camp.post_url ? (
                       <div className="p-2.5 rounded-xl bg-pink-500/5 border border-pink-500/15 flex items-center justify-between text-xs">
                         <div className="flex items-center gap-1.5 truncate max-w-[80%]">
                           <InstagramIcon className="w-3.5 h-3.5 text-pink-400 flex-shrink-0" />
@@ -873,12 +889,12 @@ export const InstagramAutoDmPage: React.FC = () => {
                       </div>
                     ) : (
                       <div className="p-2 rounded-xl bg-white/[0.02] border border-dashed border-white/10 text-[11px] text-gray-500 flex items-center justify-between">
-                        <span>No specific Reel linked (Webhook mode)</span>
+                        <span>No specific Reel linked</span>
                         <button
                           onClick={() => openEditModal(camp)}
                           className="text-pink-400 hover:underline"
                         >
-                          + Add Reel Link
+                          + Select Post/Reel
                         </button>
                       </div>
                     )}
@@ -915,6 +931,19 @@ export const InstagramAutoDmPage: React.FC = () => {
                         <span className={camp.send_comment_reply ? 'text-emerald-400 font-medium' : 'text-gray-500'}>
                           {camp.send_comment_reply ? 'Enabled' : 'Disabled'}
                         </span>
+                      </div>
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px]">
+                        <span className="flex items-center gap-1.5 text-emerald-400">
+                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                          Live Auto-Scan (every ~90s)
+                        </span>
+                        {camp.last_scanned_at ? (
+                          <span className="text-gray-400 font-mono text-[10px]">
+                            Last: {new Date(camp.last_scanned_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 text-[10px]">Pending first scan</span>
+                        )}
                       </div>
                     </div>
 
@@ -1608,10 +1637,34 @@ export const InstagramAutoDmPage: React.FC = () => {
                 </div>
               )}
 
-              {/* Post/Reel picker */}
-              <div className="space-y-2">
+              {/* Post/Reel picker (Superprofile Style) */}
+              <div className="space-y-3 pt-1">
+                {account && (
+                  <div className="flex flex-col items-center justify-center py-2 space-y-1.5 border-b border-white/5 pb-3">
+                    <div className="relative p-1 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 shadow-md shadow-pink-500/20">
+                      <div className="p-0.5 bg-dark-card rounded-full">
+                        {account.profile_picture_url ? (
+                          <img
+                            src={account.profile_picture_url}
+                            alt={account.username}
+                            referrerPolicy="no-referrer"
+                            className="w-14 h-14 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 text-white font-bold flex items-center justify-center text-lg">
+                            {account.username.slice(0, 1).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <span className="text-xs font-bold text-white tracking-wide">
+                      @{account.username}
+                    </span>
+                  </div>
+                )}
+
                 <label className="block text-xs font-semibold text-gray-300">
-                  The comment is on...
+                  The Comment is on...
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {([

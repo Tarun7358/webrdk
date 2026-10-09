@@ -739,7 +739,7 @@ class InstagramAutoDmService:
             media_id = cls.shortcode_to_media_id(shortcode) if shortcode else None
             return [media_id] if media_id else []
 
-        media = await cls.fetch_user_media(session_cookie, account.instagram_business_id or "")
+        media = await cls.fetch_user_media(session_cookie, account.instagram_business_id or "", username=account.username or "")
         if mode == "NEXT" and campaign.created_at:
             created = campaign.created_at
             if created.tzinfo is None:
@@ -755,38 +755,94 @@ class InstagramAutoDmService:
         return ids
 
     @classmethod
-    async def fetch_user_media(cls, session_cookie: str, user_id: str, count: int = 24) -> List[Dict[str, Any]]:
+    async def fetch_user_media(cls, session_cookie: str, user_id: str, count: int = 24, username: str = "") -> List[Dict[str, Any]]:
         """Lists the creator's recent posts/reels (for the post picker grid)."""
-        if not user_id:
+        from urllib.parse import unquote
+        if not user_id or not str(user_id).isdigit():
+            # sessionid cookies are formatted '<user_pk>:<token>:...'
+            head = unquote(session_cookie or "").split(":")[0]
+            user_id = head if head.isdigit() else ""
+        if not user_id and not username:
             return []
+        cookie_str = f"sessionid={session_cookie};"
+        if user_id:
+            cookie_str += f" ds_user_id={user_id};"
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
             "X-IG-App-ID": "936619743392459",
-            "Cookie": f"sessionid={session_cookie};"
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"https://www.instagram.com/{username}/" if username else "https://www.instagram.com/",
+            "Accept": "*/*",
+            "Cookie": cookie_str
         }
+        urls = []
+        if user_id:
+            urls.append(f"https://www.instagram.com/api/v1/feed/user/{user_id}/?count={count}")
+        if username:
+            urls.append(f"https://www.instagram.com/api/v1/feed/user/{username}/username/?count={count}")
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                resp = await client.get(
-                    f"https://www.instagram.com/api/v1/feed/user/{user_id}/?count={count}",
-                    headers=headers
-                )
-                if resp.status_code != 200:
-                    return []
                 out: List[Dict[str, Any]] = []
-                for it in resp.json().get("items", []):
-                    cands = (it.get("image_versions2") or {}).get("candidates") or []
-                    if not cands and it.get("carousel_media"):
-                        cands = (it["carousel_media"][0].get("image_versions2") or {}).get("candidates") or []
-                    thumb = cands[min(1, len(cands) - 1)]["url"] if cands else None
-                    out.append({
-                        "id": str(it.get("pk")),
-                        "code": it.get("code"),
-                        "thumbnail_url": thumb,
-                        "caption": ((it.get("caption") or {}).get("text") or "")[:120],
-                        "media_type": it.get("media_type"),
-                        "comment_count": it.get("comment_count", 0),
-                        "taken_at": it.get("taken_at")
-                    })
+                for u in urls:
+                    try:
+                        resp = await client.get(u, headers=headers)
+                        if resp.status_code == 200:
+                            items = resp.json().get("items", [])
+                            if items:
+                                for it in items:
+                                    cands = (it.get("image_versions2") or {}).get("candidates") or []
+                                    if not cands and it.get("carousel_media"):
+                                        cands = (it["carousel_media"][0].get("image_versions2") or {}).get("candidates") or []
+                                    thumb = cands[min(1, len(cands) - 1)]["url"] if cands else None
+                                    out.append({
+                                        "id": str(it.get("pk")),
+                                        "code": it.get("code"),
+                                        "thumbnail_url": thumb,
+                                        "caption": ((it.get("caption") or {}).get("text") or "")[:120],
+                                        "media_type": it.get("media_type"),
+                                        "comment_count": it.get("comment_count", 0),
+                                        "taken_at": it.get("taken_at")
+                                    })
+                                if out:
+                                    return out
+                        else:
+                            logger.warning(f"Instagram media fetch {u} -> {resp.status_code}: {resp.text[:200]}")
+                    except Exception as ex:
+                        logger.warning(f"Error fetching {u}: {ex}")
+
+                # Fallback: web_profile_info
+                if username and not out:
+                    try:
+                        prof_url = f"https://www.instagram.com/api/v1/users/web_profile_info/?username={username}"
+                        prof_resp = await client.get(prof_url, headers=headers)
+                        if prof_resp.status_code == 200:
+                            edges = (
+                                prof_resp.json()
+                                .get("data", {})
+                                .get("user", {})
+                                .get("edge_owner_to_timeline_media", {})
+                                .get("edges", [])
+                            )
+                            for edge in edges:
+                                node = edge.get("node", {})
+                                caption_edges = node.get("edge_media_to_caption", {}).get("edges", [])
+                                cap = caption_edges[0].get("node", {}).get("text", "") if caption_edges else ""
+                                out.append({
+                                    "id": str(node.get("id")),
+                                    "code": node.get("shortcode"),
+                                    "thumbnail_url": node.get("display_url"),
+                                    "caption": cap[:120],
+                                    "media_type": 1 if not node.get("is_video") else 2,
+                                    "comment_count": node.get("edge_media_to_comment", {}).get("count", 0),
+                                    "taken_at": node.get("taken_at_timestamp")
+                                })
+                            if out:
+                                return out
+                        else:
+                            logger.warning(f"web_profile_info -> {prof_resp.status_code}: {prof_resp.text[:200]}")
+                    except Exception as prof_ex:
+                        logger.warning(f"web_profile_info error: {prof_ex}")
+
                 return out
         except Exception as e:
             logger.error(f"Error fetching Instagram media: {e}")
