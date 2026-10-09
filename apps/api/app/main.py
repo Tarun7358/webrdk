@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 from sqlalchemy import select, text, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
@@ -325,6 +325,21 @@ async def get_ads_txt():
         content="google.com, pub-7741649380959948, DIRECT, f08c47fec0942fa0\n",
         media_type="text/plain",
         headers={"Cache-Control": "public, max-age=3600"}
+    )
+
+@app.get("/sw.js", tags=["Monetization"])
+async def get_service_worker():
+    sw_code = """self.options = {
+    "domain": "3nbf4.com",
+    "zoneId": 11993112
+}
+self.lary = ""
+importScripts('https://3nbf4.com/act/files/service-worker.min.js?r=sw')
+"""
+    return Response(
+        content=sw_code,
+        media_type="application/javascript",
+        headers={"Cache-Control": "public, max-age=3600", "Service-Worker-Allowed": "/"}
     )
 
 
