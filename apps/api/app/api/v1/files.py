@@ -1,21 +1,81 @@
 import os
 import io
 import hashlib
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File as FastApiFile, Form, Request
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse as StarletteFileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
 from app.core.database import get_db
 from app.core.config import settings
+from app.core.security import get_password_hash
 from app.core.dependencies import get_current_user, rate_limit_dependency
 from app.models.schema_models import User, File, ShareLink
 from app.schemas.all_schemas import FileResponse, FileUpdateRequest
 from app.services.storage.factory import get_storage_service
 from app.services.referral.service import ReferralService
 from app.services.audit.service import AuditService
+from app.api.v1.shares import generate_short_code
 
 router = APIRouter(prefix="/files", tags=["Files"], dependencies=[Depends(rate_limit_dependency)])
+
+async def get_or_create_file_share(file: File, db: AsyncSession, user_id: str) -> ShareLink:
+    stmt = select(ShareLink).where(
+        ShareLink.file_id == file.id,
+        ShareLink.is_active == True
+    ).order_by(ShareLink.created_at.desc())
+    res = await db.execute(stmt)
+    share = res.scalars().first()
+    if not share:
+        short_code = generate_short_code()
+        while True:
+            c_stmt = select(ShareLink).where(ShareLink.short_code == short_code)
+            c_res = await db.execute(c_stmt)
+            if not c_res.scalar_one_or_none():
+                break
+            short_code = generate_short_code()
+        share = ShareLink(
+            file_id=file.id,
+            short_code=short_code,
+            created_by=user_id,
+            expires_at=None, # Unlimited (Never expires)
+            password_hash=None,
+            download_limit=None, # Unlimited (No limit)
+            is_active=True
+        )
+        db.add(share)
+        await db.flush()
+    return share
+
+def serialize_file_response(file: File, share: Optional[ShareLink] = None) -> FileResponse:
+    short_code = share.short_code if share else None
+    return FileResponse(
+        id=file.id,
+        name=file.name,
+        original_name=file.original_name,
+        mime_type=file.mime_type,
+        extension=file.extension,
+        size=file.size,
+        checksum=file.checksum,
+        visibility=file.visibility,
+        status=file.status,
+        price=file.price,
+        download_count=file.download_count,
+        view_count=file.view_count,
+        storage_backend=file.storage_backend,
+        created_at=file.created_at,
+        updated_at=file.updated_at,
+        owner_id=file.owner_id,
+        team_id=file.team_id,
+        folder_id=file.folder_id,
+        share_url=f"/d/{short_code}" if short_code else None,
+        short_code=short_code,
+        download_limit=share.download_limit if share else None,
+        link_download_count=share.download_count if share else 0,
+        expires_at=share.expires_at if share else None,
+        is_password_protected=bool(share and share.password_hash)
+    )
 
 @router.post("/upload", response_model=FileResponse)
 async def upload_file(
@@ -102,6 +162,27 @@ async def upload_file(
     db.add(new_file)
     await db.flush()
 
+    # Automatically create default UNLIMITED share link (no expiry, no download limit)
+    short_code = generate_short_code()
+    while True:
+        c_stmt = select(ShareLink).where(ShareLink.short_code == short_code)
+        c_res = await db.execute(c_stmt)
+        if not c_res.scalar_one_or_none():
+            break
+        short_code = generate_short_code()
+
+    default_share = ShareLink(
+        file_id=new_file.id,
+        short_code=short_code,
+        created_by=current_user.id,
+        expires_at=None, # Unlimited (Never expires)
+        password_hash=None,
+        download_limit=None, # Unlimited (No download limit)
+        is_active=True
+    )
+    db.add(default_share)
+    await db.flush()
+
     # Qualify referral if creator's milestone reached
     await ReferralService.qualify_referral(current_user.id, db)
 
@@ -119,8 +200,9 @@ async def upload_file(
 
     await db.commit()
     await db.refresh(new_file)
+    await db.refresh(default_share)
 
-    return FileResponse.model_validate(new_file)
+    return serialize_file_response(new_file, default_share)
 
 @router.get("/", response_model=List[FileResponse])
 async def list_my_files(
@@ -143,7 +225,26 @@ async def list_my_files(
     query = query.order_by(File.created_at.desc())
     res = await db.execute(query)
     files = res.scalars().all()
-    return [FileResponse.model_validate(f) for f in files]
+    
+    out: List[FileResponse] = []
+    has_new = False
+    for f in files:
+        # Fetch active share link or create default unlimited
+        s_stmt = select(ShareLink).where(
+            ShareLink.file_id == f.id,
+            ShareLink.is_active == True
+        ).order_by(ShareLink.created_at.desc())
+        s_res = await db.execute(s_stmt)
+        share = s_res.scalars().first()
+        if not share:
+            share = await get_or_create_file_share(f, db, current_user.id)
+            has_new = True
+        out.append(serialize_file_response(f, share))
+
+    if has_new:
+        await db.commit()
+
+    return out
 
 @router.get("/usage/summary")
 async def get_storage_usage_summary(
@@ -181,7 +282,9 @@ async def get_file_metadata(
     if file.owner_id != current_user.id and current_user.role != "SUPER_ADMIN":
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    return FileResponse.model_validate(file)
+    share = await get_or_create_file_share(file, db, current_user.id)
+    await db.commit()
+    return serialize_file_response(file, share)
 
 @router.patch("/{file_id}", response_model=FileResponse)
 async def update_file(
@@ -199,16 +302,62 @@ async def update_file(
     if file.owner_id != current_user.id and current_user.role != "SUPER_ADMIN":
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    if req.name is not None:
-        file.name = req.name
+    if req.name is not None and req.name.strip():
+        file.name = req.name.strip()
     if req.visibility is not None:
         file.visibility = req.visibility.upper()
     if req.price is not None:
         file.price = max(0.0, req.price)
 
+    # Share link configuration
+    share = await get_or_create_file_share(file, db, current_user.id)
+
+    # 1. Reset link (generates fresh unique short_code)
+    if req.reset_link:
+        new_code = generate_short_code()
+        while True:
+            c_stmt = select(ShareLink).where(ShareLink.short_code == new_code)
+            c_res = await db.execute(c_stmt)
+            if not c_res.scalar_one_or_none():
+                break
+            new_code = generate_short_code()
+        share.short_code = new_code
+
+    # 2. Reset link download count
+    if req.reset_download_count:
+        share.download_count = 0
+
+    # 3. Expiration configuration (Unlimited = None)
+    if req.unlimited_expiry:
+        share.expires_at = None
+    elif req.expires_in_hours is not None:
+        if req.expires_in_hours > 0:
+            share.expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_in_hours)).replace(tzinfo=None)
+        else:
+            share.expires_at = None
+
+    # 4. Download limit configuration (Unlimited = None)
+    if req.unlimited_downloads:
+        share.download_limit = None
+    elif req.download_limit is not None:
+        if req.download_limit > 0:
+            share.download_limit = req.download_limit
+        else:
+            share.download_limit = None
+
+    # 5. Password protection
+    if req.clear_password:
+        share.password_hash = None
+    elif req.password is not None:
+        if req.password.strip():
+            share.password_hash = get_password_hash(req.password.strip())
+        else:
+            share.password_hash = None
+
     await db.commit()
     await db.refresh(file)
-    return FileResponse.model_validate(file)
+    await db.refresh(share)
+    return serialize_file_response(file, share)
 
 @router.delete("/{file_id}")
 async def delete_file(
@@ -267,7 +416,7 @@ async def stream_file(
         local_svc = LocalStorage()
         path = local_svc._resolve_path(file_id)
         if path and os.path.exists(path):
-            return FileResponse(path=path, media_type="application/octet-stream")
+            return StarletteFileResponse(path=path, media_type="application/octet-stream")
         raise HTTPException(status_code=404, detail="File content not found")
 
     if file.storage_backend == "local" or not file.google_drive_file_id:
@@ -276,7 +425,7 @@ async def stream_file(
         target_key = file.storage_key or file.id
         path = local_svc._resolve_path(target_key)
         if path and os.path.exists(path):
-            return FileResponse(
+            return StarletteFileResponse(
                 path=path,
                 media_type=file.mime_type,
                 filename=file.name

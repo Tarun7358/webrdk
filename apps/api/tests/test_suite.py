@@ -121,3 +121,64 @@ async def test_storage_service_abstraction():
 
     # Clean up
     await storage.delete(upload_res["file_id"])
+
+@pytest.mark.asyncio
+async def test_file_unlimited_share_and_reset(async_session: AsyncSession):
+    from app.api.v1.files import get_or_create_file_share, serialize_file_response
+    from app.schemas.all_schemas import FileUpdateRequest
+    from app.api.v1.shares import generate_short_code
+
+    # 1. Create a User and a File in the test session
+    user = User(
+        email="creator@rage.in",
+        password_hash="hash",
+        full_name="Vault Creator",
+        role="CREATOR",
+        referral_code="VAULT101"
+    )
+    async_session.add(user)
+    await async_session.flush()
+
+    file = File(
+        owner_id=user.id,
+        name="game_patch.zip",
+        original_name="game_patch.zip",
+        mime_type="application/zip",
+        extension="zip",
+        size=1048576,
+        checksum="abcd1234efgh5678",
+        visibility="PUBLIC",
+        status="ACTIVE"
+    )
+    async_session.add(file)
+    await async_session.flush()
+
+    # 2. Verify get_or_create_file_share creates an UNLIMITED share link
+    share = await get_or_create_file_share(file, async_session, user.id)
+    await async_session.commit()
+
+    assert share is not None
+    assert share.short_code is not None
+    assert share.expires_at is None  # UNLIMITED (Never expires)
+    assert share.download_limit is None  # UNLIMITED (No download limit)
+
+    # 3. Test serialize_file_response
+    resp = serialize_file_response(file, share)
+    assert resp.short_code == share.short_code
+    assert resp.share_url == f"/d/{share.short_code}"
+    assert resp.expires_at is None
+    assert resp.download_limit is None
+
+    # 4. Test link reset (generate new short code)
+    old_code = share.short_code
+    new_code = generate_short_code()
+    share.short_code = new_code
+    share.download_count = 0
+    await async_session.commit()
+    await async_session.refresh(share)
+
+    assert share.short_code != old_code
+    assert share.download_count == 0
+    assert share.expires_at is None  # Remains unlimited
+    assert share.download_limit is None  # Remains unlimited
+

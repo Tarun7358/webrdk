@@ -32,6 +32,10 @@ export interface FileItem {
   owner_id: string;
   share_url?: string;
   short_code?: string;
+  download_limit?: number | null;
+  link_download_count?: number;
+  expires_at?: string | null;
+  is_password_protected?: boolean;
 }
 
 export interface ShareLink {

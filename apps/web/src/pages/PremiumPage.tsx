@@ -20,6 +20,7 @@ import {
   FileCheck2,
   AlertCircle
 } from 'lucide-react';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface Plan {
   name: string;
@@ -145,10 +146,13 @@ export const PremiumPage: React.FC = () => {
     setIsQrModalOpen(true);
   };
 
-  const handleCopyUpi = () => {
-    navigator.clipboard.writeText(paymentInfo.upi_id);
-    setCopiedUpi(true);
-    setTimeout(() => setCopiedUpi(false), 2000);
+  const handleCopyUpi = async () => {
+    if (!paymentInfo?.upi_id) return;
+    const ok = await copyToClipboard(paymentInfo.upi_id);
+    if (ok) {
+      setCopiedUpi(true);
+      setTimeout(() => setCopiedUpi(false), 2000);
+    }
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

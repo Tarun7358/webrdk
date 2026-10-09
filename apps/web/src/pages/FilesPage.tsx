@@ -17,10 +17,13 @@ import {
   File as FileGeneric,
   X,
   Check,
-  CheckCircle2
+  CheckCircle2,
+  Sliders
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { copyToClipboard } from '../utils/clipboard';
+import { EditFileModal } from '../components/EditFileModal';
 
 export const FilesPage: React.FC = () => {
   const { refreshUser } = useAuth();
@@ -28,6 +31,7 @@ export const FilesPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [filterVisibility, setFilterVisibility] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [editingFile, setEditingFile] = useState<FileItem | null>(null);
 
   // Share Modal State
   const [activeFileForShare, setActiveFileForShare] = useState<FileItem | null>(null);
@@ -213,6 +217,14 @@ export const FilesPage: React.FC = () => {
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
+                          onClick={() => setEditingFile(file)}
+                          title="Configure File & Link"
+                          className="p-2 rounded-lg bg-slate-800/80 border border-white/5 hover:border-amber-500/50 hover:text-amber-400 text-slate-300 transition-colors cursor-pointer"
+                        >
+                          <Sliders className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => {
                             setActiveFileForShare(file);
                             setCreatedShare(null);
@@ -297,10 +309,12 @@ export const FilesPage: React.FC = () => {
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText(`${window.location.origin}/d/${createdShare.short_code}`);
-                        setCopiedLink(true);
-                        setTimeout(() => setCopiedLink(false), 2000);
+                      onClick={async () => {
+                        const ok = await copyToClipboard(`${window.location.origin}/d/${createdShare.short_code}`);
+                        if (ok) {
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2000);
+                        }
                       }}
                       className="px-3 py-1.5 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 text-white rounded-lg text-xs font-bold shrink-0 cursor-pointer shadow-sm"
                     >
@@ -508,6 +522,15 @@ export const FilesPage: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Edit & Configure Modal */}
+      <EditFileModal
+        file={editingFile}
+        isOpen={Boolean(editingFile)}
+        onClose={() => setEditingFile(null)}
+        onUpdated={(updatedFile) => {
+          setFiles((prev) => prev.map((f) => (f.id === updatedFile.id ? updatedFile : f)));
+        }}
+      />
     </div>
   );
 };

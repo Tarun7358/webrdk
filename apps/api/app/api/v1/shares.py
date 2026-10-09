@@ -56,6 +56,7 @@ async def create_share_link(
         expires_at = (datetime.now(timezone.utc) + timedelta(hours=req.expires_in_hours)).replace(tzinfo=None)
 
     pw_hash = get_password_hash(req.password) if req.password else None
+    download_limit = req.download_limit if (req.download_limit and req.download_limit > 0) else None
 
     share_link = ShareLink(
         file_id=file.id,
@@ -63,7 +64,7 @@ async def create_share_link(
         created_by=current_user.id,
         expires_at=expires_at,
         password_hash=pw_hash,
-        download_limit=req.download_limit,
+        download_limit=download_limit,
         is_active=True
     )
     db.add(share_link)
@@ -102,6 +103,38 @@ async def get_public_download_page_data(
     row = res.first()
 
     if not row:
+        # Check if short_code was provided as file id
+        f_stmt = select(File, User).join(User, File.owner_id == User.id).where(
+            File.id == short_code,
+            or_(File.is_deleted == False, File.is_deleted.is_(None)),
+            File.status != "DELETED"
+        )
+        f_res = await db.execute(f_stmt)
+        f_row = f_res.first()
+        if f_row:
+            file_obj, creator_obj = f_row
+            sl_stmt = select(ShareLink).where(
+                ShareLink.file_id == file_obj.id,
+                ShareLink.is_active == True
+            ).order_by(ShareLink.created_at.desc())
+            sl_res = await db.execute(sl_stmt)
+            share_link = sl_res.scalars().first()
+            if not share_link:
+                sc = generate_short_code()
+                share_link = ShareLink(
+                    file_id=file_obj.id,
+                    short_code=sc,
+                    created_by=creator_obj.id,
+                    expires_at=None,
+                    download_limit=None,
+                    is_active=True
+                )
+                db.add(share_link)
+                await db.commit()
+                await db.refresh(share_link)
+            row = (share_link, file_obj, creator_obj)
+
+    if not row:
         raise HTTPException(status_code=404, detail="Shared file not found or link deactivated")
 
     share_link, file, creator = row
@@ -109,7 +142,7 @@ async def get_public_download_page_data(
     if share_link.expires_at and share_link.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="This share link has expired")
 
-    if share_link.download_limit and share_link.download_count >= share_link.download_limit:
+    if share_link.download_limit and share_link.download_limit > 0 and share_link.download_count >= share_link.download_limit:
         raise HTTPException(status_code=410, detail="This share link has reached its maximum download limit")
 
     is_video = file.mime_type.startswith("video/") or file.extension in ["mp4", "webm", "mov", "mkv"]
@@ -141,6 +174,12 @@ async def verify_share_password(
     stmt = select(ShareLink).where(ShareLink.short_code == short_code, ShareLink.is_active == True)
     res = await db.execute(stmt)
     link = res.scalar_one_or_none()
+
+    if not link:
+        # Fallback if file_id was supplied
+        stmt_f = select(ShareLink).where(ShareLink.file_id == short_code, ShareLink.is_active == True).order_by(ShareLink.created_at.desc())
+        res_f = await db.execute(stmt_f)
+        link = res_f.scalars().first()
 
     if not link:
         raise HTTPException(status_code=404, detail="Share link not found")

@@ -19,6 +19,7 @@ import {
   Share2,
   Check
 } from 'lucide-react';
+import { copyToClipboard } from '../utils/clipboard';
 
 export const DownloadPage: React.FC = () => {
   const { shortCode } = useParams<{ shortCode: string }>();
@@ -109,10 +110,12 @@ export const DownloadPage: React.FC = () => {
     }
   };
 
-  const copyCurrentPageLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
+  const copyCurrentPageLink = async () => {
+    const ok = await copyToClipboard(window.location.href);
+    if (ok) {
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
+    }
   };
 
   if (isLoading) {

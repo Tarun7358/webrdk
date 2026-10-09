@@ -60,6 +60,11 @@ class FileResponse(BaseModel):
     team_id: Optional[str] = None
     folder_id: Optional[str] = None
     share_url: Optional[str] = None
+    short_code: Optional[str] = None
+    download_limit: Optional[int] = None
+    link_download_count: Optional[int] = 0
+    expires_at: Optional[datetime] = None
+    is_password_protected: Optional[bool] = False
 
     class Config:
         from_attributes = True
@@ -69,6 +74,15 @@ class FileUpdateRequest(BaseModel):
     visibility: Optional[str] = None # PUBLIC, PRIVATE, UNLISTED, PAID
     price: Optional[float] = None
     folder_id: Optional[str] = None
+    # Share link configuration
+    password: Optional[str] = None
+    clear_password: Optional[bool] = False
+    expires_in_hours: Optional[int] = None # Positive integer = hours until expiry; None / 0 with unlimited_expiry = None
+    unlimited_expiry: Optional[bool] = False
+    download_limit: Optional[int] = None # Positive integer = download cap; None / 0 with unlimited_downloads = None
+    unlimited_downloads: Optional[bool] = False
+    reset_link: Optional[bool] = False # True = generate fresh short_code
+    reset_download_count: Optional[bool] = False # True = reset link download count
 
 class ShareLinkCreateRequest(BaseModel):
     file_id: str

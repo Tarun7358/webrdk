@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import type { FileItem, Wallet } from '../types';
+import { copyToClipboard } from '../utils/clipboard';
+import { EditFileModal } from '../components/EditFileModal';
 import {
   FolderOpen,
   DownloadCloud,
@@ -16,7 +18,9 @@ import {
   ArrowUpRight,
   Sparkles,
   ShieldCheck,
-  FileText
+  FileText,
+  Sliders,
+  Check
 } from 'lucide-react';
 
 export const DashboardPage: React.FC = () => {
@@ -25,6 +29,7 @@ export const DashboardPage: React.FC = () => {
   const [wallet, setWallet] = useState<Wallet | null>(null);
   const [copiedRef, setCopiedRef] = useState(false);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const [editingFile, setEditingFile] = useState<FileItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -45,20 +50,25 @@ export const DashboardPage: React.FC = () => {
     loadData();
   }, []);
 
-  const copyReferralLink = () => {
-    if (!user) return;
+  const copyReferralLink = async () => {
+    if (!user?.referral_code) return;
     const link = `${window.location.origin}/register?ref=${user.referral_code}`;
-    navigator.clipboard.writeText(link);
-    setCopiedRef(true);
-    setTimeout(() => setCopiedRef(false), 2500);
+    const ok = await copyToClipboard(link);
+    if (ok) {
+      setCopiedRef(true);
+      setTimeout(() => setCopiedRef(false), 2500);
+    }
   };
 
-  const copyFileLink = (shortCode?: string) => {
-    if (!shortCode) return;
-    const url = `${window.location.origin}/d/${shortCode}`;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(shortCode);
-    setTimeout(() => setCopiedLink(null), 2500);
+  const copyFileLink = async (shortCode?: string, fileId?: string) => {
+    const code = shortCode || fileId;
+    if (!code) return;
+    const url = `${window.location.origin}/d/${code}`;
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setCopiedLink(code);
+      setTimeout(() => setCopiedLink(null), 2500);
+    }
   };
 
   const totalDownloads = files.reduce((acc, f) => acc + f.download_count, 0);
@@ -271,20 +281,33 @@ export const DashboardPage: React.FC = () => {
                       {new Date(file.created_at).toLocaleDateString()}
                     </td>
                     <td className="py-3.5 text-right">
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex items-center justify-end gap-1.5">
                         <button
                           type="button"
-                          onClick={() => copyFileLink(file.short_code)}
+                          onClick={() => copyFileLink(file.short_code, file.id)}
                           className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 transition-colors flex items-center gap-1 cursor-pointer"
                           title="Copy share link"
                         >
-                          <Copy className="w-3 h-3 text-slate-400" />
-                          <span>{copiedLink === file.short_code ? 'Copied!' : 'Copy'}</span>
+                          {copiedLink === (file.short_code || file.id) ? (
+                            <Check className="w-3 h-3 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-3 h-3 text-slate-400" />
+                          )}
+                          <span>{copiedLink === (file.short_code || file.id) ? 'Copied!' : 'Copy'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingFile(file)}
+                          className="px-2.5 py-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-white/5 transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Edit & Configure File / Link"
+                        >
+                          <Sliders className="w-3 h-3 text-rose-400" />
+                          <span>Edit</span>
                         </button>
                         <Link
-                          to={`/d/${file.short_code}`}
+                          to={`/d/${file.short_code || file.id}`}
                           target="_blank"
-                          className="p-1 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-white/5 transition-colors"
+                          className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-rose-400 border border-white/5 transition-colors"
                           title="View public page"
                         >
                           <ExternalLink className="w-3 h-3" />
@@ -298,6 +321,16 @@ export const DashboardPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Edit & Configure Modal */}
+      <EditFileModal
+        file={editingFile}
+        isOpen={Boolean(editingFile)}
+        onClose={() => setEditingFile(null)}
+        onUpdated={(updatedFile) => {
+          setFiles((prev) => prev.map((f) => (f.id === updatedFile.id ? updatedFile : f)));
+        }}
+      />
     </div>
   );
 };

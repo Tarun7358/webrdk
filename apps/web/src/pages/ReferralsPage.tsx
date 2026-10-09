@@ -11,6 +11,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { copyToClipboard } from '../utils/clipboard';
 
 export const ReferralsPage: React.FC = () => {
   const [stats, setStats] = useState<any | null>(null);
@@ -31,12 +32,14 @@ export const ReferralsPage: React.FC = () => {
     fetchReferrals();
   }, []);
 
-  const copyLink = () => {
+  const copyLink = async () => {
     if (!stats) return;
     const fullLink = `${window.location.origin}${stats.referral_link}`;
-    navigator.clipboard.writeText(fullLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const ok = await copyToClipboard(fullLink);
+    if (ok) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   if (isLoading || !stats) {

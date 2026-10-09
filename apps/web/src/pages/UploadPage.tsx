@@ -18,6 +18,7 @@ import {
   Zap,
   HardDrive
 } from 'lucide-react';
+import { copyToClipboard } from '../utils/clipboard';
 
 export const UploadPage: React.FC = () => {
   const { refreshUser } = useAuth();
@@ -78,16 +79,19 @@ export const UploadPage: React.FC = () => {
   };
 
   const getPublicShareUrl = () => {
-    if (!uploadSuccess?.short_code) return '';
-    return `${window.location.origin}/d/${uploadSuccess.short_code}`;
+    const code = uploadSuccess?.short_code || uploadSuccess?.id;
+    if (!code) return '';
+    return `${window.location.origin}/d/${code}`;
   };
 
-  const copyShareLink = () => {
+  const copyShareLink = async () => {
     const url = getPublicShareUrl();
     if (url) {
-      navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      const ok = await copyToClipboard(url);
+      if (ok) {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }
     }
   };
 

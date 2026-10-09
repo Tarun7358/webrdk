@@ -15,6 +15,7 @@ import {
   Check
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { copyToClipboard } from '../utils/clipboard';
 
 export const CreatorHubPage: React.FC = () => {
   const [data, setData] = useState<CreatorDashboardData | null>(null);
@@ -35,11 +36,13 @@ export const CreatorHubPage: React.FC = () => {
     fetchDashboard();
   }, []);
 
-  const copyFileLink = (file: any) => {
+  const copyFileLink = async (file: any) => {
     const url = `${window.location.origin}/d/${file.short_code || file.id}`;
-    navigator.clipboard.writeText(url);
-    setCopiedFileId(file.id);
-    setTimeout(() => setCopiedFileId(null), 2000);
+    const ok = await copyToClipboard(url);
+    if (ok) {
+      setCopiedFileId(file.id);
+      setTimeout(() => setCopiedFileId(null), 2000);
+    }
   };
 
   if (isLoading || !data) {

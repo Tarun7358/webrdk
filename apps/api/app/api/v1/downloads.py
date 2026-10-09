@@ -35,16 +35,28 @@ async def trigger_download(
     row = res.first()
 
     if not row:
+        # Fallback if short_code was provided as file id
+        stmt_f = select(File).where(File.id == short_code, File.is_deleted == False)
+        res_f = await db.execute(stmt_f)
+        f_obj = res_f.scalar_one_or_none()
+        if f_obj:
+            sl_stmt = select(ShareLink).where(ShareLink.file_id == f_obj.id, ShareLink.is_active == True).order_by(ShareLink.created_at.desc())
+            sl_res = await db.execute(sl_stmt)
+            sl_obj = sl_res.scalars().first()
+            if sl_obj:
+                row = (sl_obj, f_obj)
+
+    if not row:
         raise HTTPException(status_code=404, detail="Download link not found")
 
     share_link, file = row
 
-    # Expiry validation (None means unlimited)
-    if share_link.expires_at and share_link.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
+    # Expiry validation (None means unlimited, never expires)
+    if share_link.expires_at is not None and share_link.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="This download link has expired")
 
-    # Download limit validation (None means unlimited)
-    if share_link.download_limit and share_link.download_count >= share_link.download_limit:
+    # Download limit validation (None means unlimited, no download cap)
+    if share_link.download_limit is not None and share_link.download_limit > 0 and share_link.download_count >= share_link.download_limit:
         raise HTTPException(status_code=410, detail="Download limit reached for this share link")
 
     # Password check
