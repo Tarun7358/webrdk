@@ -2,6 +2,8 @@ import io
 import os
 import json
 import logging
+import asyncio
+import gc
 from typing import BinaryIO, Dict, Any, Optional, AsyncIterator
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -245,17 +247,29 @@ class GoogleDriveStorage(StorageService):
         file_id = file_id_or_key.replace("gdrive://", "").split("/")[-1]
         request = self.service.files().get_media(fileId=file_id)
         fh = io.BytesIO()
-        downloader = MediaIoBaseDownload(fh, request)
+        # Cap chunksize to 1MB (1024*1024) instead of default 100MB to prevent container OOM (Out Of Memory) crashes
+        downloader = MediaIoBaseDownload(fh, request, chunksize=1024 * 1024)
 
         done = False
-        while not done:
-            status, done = downloader.next_chunk()
-            fh.seek(0)
-            chunk = fh.read()
-            fh.seek(0)
-            fh.truncate(0)
-            if chunk:
-                yield chunk
+        try:
+            while not done:
+                # Run synchronous next_chunk in background worker thread to keep FastAPI event loop non-blocking
+                status, done = await asyncio.to_thread(downloader.next_chunk)
+                fh.seek(0)
+                chunk = fh.read()
+                fh.seek(0)
+                fh.truncate(0)
+                if chunk:
+                    yield chunk
+                    del chunk
+        finally:
+            try:
+                fh.close()
+            except Exception:
+                pass
+            del fh
+            gc.collect()
+
 
     async def delete(self, file_id_or_key: str) -> bool:
         if not self.service:
