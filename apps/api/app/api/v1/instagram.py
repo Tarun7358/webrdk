@@ -1,10 +1,15 @@
 import json
+import base64
 import logging
 from typing import List, Optional
+from urllib.parse import quote
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status, Query
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.models.schema_models import User, InstagramAccount, InstagramCampaign, InstagramDmLog, File
 from app.schemas.instagram_schemas import (
@@ -19,6 +24,176 @@ logger = logging.getLogger("rage.api.instagram")
 router = APIRouter(prefix="/integrations/instagram", tags=["Instagram Auto-DM"])
 
 VERIFY_TOKEN = "rage_cloud_meta_webhook_secret_2026"
+
+# ----------------- Meta 1-Click OAuth Handlers (Superprofile Flow) -----------------
+
+@router.get("/oauth/login-url")
+async def get_instagram_oauth_login_url(
+    return_to: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Generates Meta OAuth dialog URL for 1-Click Instagram connection like Superprofile.
+    """
+    if not settings.META_APP_ID:
+        raise HTTPException(
+            status_code=400,
+            detail="Meta App ID is not configured on the server. Please set META_APP_ID and META_APP_SECRET in Railway environment variables."
+        )
+
+    redirect_uri = settings.META_REDIRECT_URI or "https://rdkwebsite-production.up.railway.app/api/v1/integrations/instagram/oauth/callback"
+    
+    payload = json.dumps({
+        "user_id": current_user.id,
+        "return_to": return_to or "https://rdkwebsite.netlify.app/instagram"
+    })
+    state_b64 = base64.urlsafe_b64encode(payload.encode()).decode()
+
+    scope = "instagram_basic,instagram_manage_messages,instagram_manage_comments,pages_show_list,pages_read_engagement,pages_manage_metadata"
+
+    login_url = (
+        f"https://www.facebook.com/v19.0/dialog/oauth?"
+        f"client_id={settings.META_APP_ID}&"
+        f"redirect_uri={quote(redirect_uri, safe='')}&"
+        f"scope={scope}&"
+        f"response_type=code&"
+        f"state={state_b64}"
+    )
+
+    return {"login_url": login_url, "meta_app_id": settings.META_APP_ID}
+
+
+@router.get("/oauth/callback")
+async def instagram_oauth_callback(
+    code: Optional[str] = Query(None),
+    state: Optional[str] = Query(None),
+    error: Optional[str] = Query(None),
+    error_description: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Receives authorization code from Meta, exchanges for 60-day long-lived token,
+    extracts Instagram Business Account, and connects it automatically.
+    """
+    return_to = "https://rdkwebsite.netlify.app/instagram"
+    user_id = None
+
+    if state:
+        try:
+            decoded = json.loads(base64.urlsafe_b64decode(state.encode()).decode())
+            user_id = decoded.get("user_id")
+            return_to = decoded.get("return_to", return_to)
+        except Exception as e:
+            logger.error(f"Error decoding OAuth state: {e}")
+
+    if error or not code:
+        err_msg = error_description or error or "Authentication was cancelled by user."
+        return RedirectResponse(f"{return_to}?error={quote(err_msg)}")
+
+    if not user_id:
+        return RedirectResponse(f"{return_to}?error={quote('Invalid or expired state session.')}")
+
+    redirect_uri = settings.META_REDIRECT_URI or "https://rdkwebsite-production.up.railway.app/api/v1/integrations/instagram/oauth/callback"
+
+    try:
+        async with httpx.AsyncClient(timeout=25.0) as client:
+            token_resp = await client.get(
+                "https://graph.facebook.com/v19.0/oauth/access_token",
+                params={
+                    "client_id": settings.META_APP_ID,
+                    "client_secret": settings.META_APP_SECRET,
+                    "redirect_uri": redirect_uri,
+                    "code": code
+                }
+            )
+            token_json = token_resp.json()
+            short_token = token_json.get("access_token")
+
+            if not short_token:
+                err = token_json.get("error", {}).get("message", "Failed to obtain access token from Meta.")
+                return RedirectResponse(f"{return_to}?error={quote(err)}")
+
+            long_resp = await client.get(
+                "https://graph.facebook.com/v19.0/oauth/access_token",
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": settings.META_APP_ID,
+                    "client_secret": settings.META_APP_SECRET,
+                    "fb_exchange_token": short_token
+                }
+            )
+            long_json = long_resp.json()
+            user_access_token = long_json.get("access_token") or short_token
+
+            accounts_resp = await client.get(
+                "https://graph.facebook.com/v19.0/me/accounts",
+                params={
+                    "fields": "id,name,access_token,instagram_business_account{id,username,name}",
+                    "access_token": user_access_token
+                }
+            )
+            accounts_json = accounts_resp.json()
+            pages = accounts_json.get("data", [])
+
+            target_ig = None
+            target_page_id = None
+            target_token = user_access_token
+
+            for p in pages:
+                ig_data = p.get("instagram_business_account")
+                if ig_data and ig_data.get("id"):
+                    target_ig = ig_data
+                    target_page_id = p.get("id")
+                    target_token = p.get("access_token") or user_access_token
+                    
+                    try:
+                        await client.post(
+                            f"https://graph.facebook.com/v19.0/{target_page_id}/subscribed_apps",
+                            params={
+                                "subscribed_fields": "comments,messages",
+                                "access_token": target_token
+                            }
+                        )
+                    except Exception:
+                        pass
+                    break
+
+            if not target_ig:
+                err_msg = "No Instagram Business or Creator account found on your Facebook Pages. Please switch your Instagram to a Professional account and link a Facebook Page in Instagram Settings."
+                return RedirectResponse(f"{return_to}?error={quote(err_msg)}")
+
+            ig_business_id = target_ig["id"]
+            ig_username = target_ig.get("username", "creator")
+
+            stmt = select(InstagramAccount).where(InstagramAccount.user_id == user_id)
+            res = await db.execute(stmt)
+            account = res.scalar_one_or_none()
+
+            if account:
+                account.instagram_business_id = ig_business_id
+                account.facebook_page_id = target_page_id
+                account.username = ig_username
+                account.access_token = target_token
+                account.is_active = True
+            else:
+                account = InstagramAccount(
+                    user_id=user_id,
+                    instagram_business_id=ig_business_id,
+                    facebook_page_id=target_page_id,
+                    username=ig_username,
+                    access_token=target_token,
+                    hourly_limit=30,
+                    daily_limit=100,
+                    is_active=True
+                )
+                db.add(account)
+
+            await db.commit()
+            return RedirectResponse(f"{return_to}?connected=true&handle={quote(ig_username)}")
+
+    except Exception as e:
+        logger.error(f"Error in Instagram OAuth Callback: {e}")
+        return RedirectResponse(f"{return_to}?error={quote(str(e))}")
 
 # ----------------- Meta Webhook Handlers -----------------
 

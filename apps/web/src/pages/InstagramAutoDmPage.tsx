@@ -17,7 +17,8 @@ import {
   HelpCircle,
   Zap,
   Lock,
-  Flame
+  Flame,
+  ArrowRight
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -90,6 +91,44 @@ export const InstagramAutoDmPage: React.FC = () => {
   const [showCampaignModal, setShowCampaignModal] = useState(false);
   const [editingCampaign, setEditingCampaign] = useState<InstagramCampaign | null>(null);
   const [copiedText, setCopiedText] = useState<string | null>(null);
+
+  // 1-Click Meta OAuth States
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [oauthError, setOauthError] = useState<string | null>(null);
+  const [oauthSuccess, setOauthSuccess] = useState<string | null>(null);
+  const [showManualForm, setShowManualForm] = useState(false);
+
+  // Detect OAuth redirect outcomes
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('connected');
+    const handle = params.get('handle');
+    const err = params.get('error');
+
+    if (connected === 'true') {
+      setOauthSuccess(`🎉 Successfully connected @${handle || 'your Instagram account'} via Meta OAuth!`);
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (err) {
+      setOauthError(decodeURIComponent(err));
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const handleStartOAuth = async () => {
+    try {
+      setOauthLoading(true);
+      setOauthError(null);
+      const res = await api.getInstagramOAuthLoginUrl(window.location.origin + '/instagram');
+      if (res?.login_url) {
+        window.location.href = res.login_url;
+      }
+    } catch (err: any) {
+      setOauthError(err.message || 'Failed to initiate Meta OAuth login.');
+      setShowManualForm(true);
+    } finally {
+      setOauthLoading(false);
+    }
+  };
 
   // Connect Account Form
   const [connectForm, setConnectForm] = useState({
@@ -367,6 +406,28 @@ export const InstagramAutoDmPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* OAuth Success Alert */}
+      {oauthSuccess && (
+        <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 flex-shrink-0" />
+            <span className="font-semibold">{oauthSuccess}</span>
+          </div>
+          <button onClick={() => setOauthSuccess(null)} className="text-emerald-400/60 hover:text-emerald-400">✕</button>
+        </div>
+      )}
+
+      {/* OAuth Error Alert */}
+      {oauthError && (
+        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center justify-between gap-3 animate-in fade-in duration-200">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{oauthError}</span>
+          </div>
+          <button onClick={() => setOauthError(null)} className="text-red-400/60 hover:text-red-400">✕</button>
+        </div>
+      )}
 
       {/* Account Connection Status Banner */}
       {account ? (
@@ -848,7 +909,42 @@ export const InstagramAutoDmPage: React.FC = () => {
               </div>
             )}
 
-            <form onSubmit={handleSaveAccount} className="space-y-4">
+            {/* 1-Click Meta OAuth Box (Superprofile style) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-pink-500/10 via-purple-500/10 to-indigo-500/10 border border-pink-500/30 text-center space-y-3">
+              <div className="flex items-center justify-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="text-[11px] font-bold text-white uppercase tracking-wider">Fast & Automated (Superprofile Style)</span>
+              </div>
+              <p className="text-xs text-gray-300 max-w-sm mx-auto">
+                Connect your account in seconds without copying tokens. Meta will automatically link your Business ID and verify permissions.
+              </p>
+              <button
+                type="button"
+                onClick={handleStartOAuth}
+                disabled={oauthLoading}
+                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-pink-600 via-rose-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white font-bold text-xs tracking-wide shadow-lg shadow-pink-600/30 flex items-center justify-center gap-2.5 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+              >
+                <InstagramIcon className="w-4 h-4" />
+                <span>{oauthLoading ? 'Redirecting to Meta Login...' : 'Log in with Instagram (1-Click)'}</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Manual Accordion Toggle */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="h-px bg-white/10 flex-1" />
+              <button
+                type="button"
+                onClick={() => setShowManualForm(!showManualForm)}
+                className="text-[10px] text-gray-400 hover:text-white uppercase tracking-wider font-semibold py-1 px-2 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                {showManualForm ? '▲ Hide Manual Token Setup' : '▼ Or Connect Manually via Developer Token'}
+              </button>
+              <div className="h-px bg-white/10 flex-1" />
+            </div>
+
+            {showManualForm && (
+              <form onSubmit={handleSaveAccount} className="space-y-4 pt-1">
               <div>
                 <label className="block text-xs font-semibold text-gray-300 mb-1">
                   Instagram Handle / Username *
@@ -959,6 +1055,7 @@ export const InstagramAutoDmPage: React.FC = () => {
                 </button>
               </div>
             </form>
+            )}
           </div>
         </div>
       )}

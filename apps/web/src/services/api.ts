@@ -146,6 +146,10 @@ export const api = {
   getAuditLogs: () => request<any>('/admin/audit-logs'),
 
   // Instagram Auto-DM
+  getInstagramOAuthLoginUrl: (returnTo?: string) => {
+    const q = returnTo ? `?return_to=${encodeURIComponent(returnTo)}` : '';
+    return request<any>(`/integrations/instagram/oauth/login-url${q}`);
+  },
   getInstagramAccount: () => request<any>('/integrations/instagram/account'),
   connectInstagramAccount: (data: {
     instagram_business_id: string;

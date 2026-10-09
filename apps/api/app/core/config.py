@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_SECRET: Optional[str] = Field(default_factory=lambda: os.environ.get("GOOGLE_CLIENT_SECRET"))
     GOOGLE_PROJECT_ID: Optional[str] = Field(default_factory=lambda: os.environ.get("GOOGLE_PROJECT_ID"))
     GOOGLE_DRIVE_FOLDER_ID: Optional[str] = Field(default_factory=lambda: os.environ.get("GOOGLE_DRIVE_FOLDER_ID"))
+
+    # Meta / Instagram Login OAuth (Superprofile Flow)
+    META_APP_ID: Optional[str] = Field(default_factory=lambda: os.environ.get("META_APP_ID"))
+    META_APP_SECRET: Optional[str] = Field(default_factory=lambda: os.environ.get("META_APP_SECRET"))
+    META_REDIRECT_URI: Optional[str] = Field(default_factory=lambda: os.environ.get("META_REDIRECT_URI"))
     GOOGLE_SERVICE_ACCOUNT_JSON: Optional[str] = None
     GOOGLE_OAUTH_CLIENT_SECRETS_FILE: Optional[str] = Field(default_factory=lambda: os.environ.get("GOOGLE_OAUTH_CLIENT_SECRETS_FILE"))
     GOOGLE_TOKEN_FILE: Optional[str] = "./google_token.json"
