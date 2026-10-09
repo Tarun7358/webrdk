@@ -1,3 +1,4 @@
+import base64
 import json
 import logging
 import random
@@ -394,10 +395,18 @@ class InstagramAutoDmService:
                 }
 
                 if two_factor_code and two_factor_identifier:
+                    try:
+                        packed = json.loads(base64.urlsafe_b64decode(two_factor_identifier.encode()).decode())
+                        real_identifier = packed.get("id")
+                        for k, v in (packed.get("cookies") or {}).items():
+                            client.cookies.set(k, v, domain=".instagram.com")
+                        headers["X-CSRFToken"] = (packed.get("cookies") or {}).get("csrftoken", csrf_token)
+                    except Exception:
+                        real_identifier = two_factor_identifier
                     two_fa_data = {
                         "username": clean_user,
                         "verificationCode": two_factor_code.strip(),
-                        "identifier": two_factor_identifier,
+                        "identifier": real_identifier,
                         "queryParams": "{}"
                     }
                     two_fa_resp = await client.post(
@@ -450,10 +459,14 @@ class InstagramAutoDmService:
                 elif res_data.get("two_factor_required"):
                     two_fa_info = res_data.get("two_factor_info", {})
                     identifier = two_fa_info.get("two_factor_identifier")
+                    packed_id = base64.urlsafe_b64encode(json.dumps({
+                        "id": identifier,
+                        "cookies": {c.name: c.value for c in client.cookies.jar}
+                    }).encode()).decode()
                     return {
                         "success": False,
                         "two_factor_required": True,
-                        "two_factor_identifier": identifier,
+                        "two_factor_identifier": packed_id,
                         "message": "Two-Factor Authentication is enabled on your Instagram account. Please enter your 6-digit verification code."
                     }
                 elif res_data.get("checkpoint_url"):

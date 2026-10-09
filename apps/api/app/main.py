@@ -36,6 +36,15 @@ async def run_db_migrations(conn):
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_tier VARCHAR(50) DEFAULT 'FREE';"))
             await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS storage_limit_bytes BIGINT DEFAULT 10737418240;"))
             logger.info("PostgreSQL schema migration completed.")
+            # Instagram Auto-DM (Option A session-based) columns
+            await conn.execute(text("ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS session_cookie TEXT;"))
+            await conn.execute(text("ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS profile_picture_url VARCHAR(500);"))
+            await conn.execute(text("ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS connection_type VARCHAR(20) DEFAULT 'SESSION' NOT NULL;"))
+            await conn.execute(text("ALTER TABLE instagram_accounts ALTER COLUMN access_token DROP NOT NULL;"))
+            await conn.execute(text("ALTER TABLE instagram_accounts ALTER COLUMN instagram_business_id DROP NOT NULL;"))
+            await conn.execute(text("ALTER TABLE instagram_campaigns ADD COLUMN IF NOT EXISTS post_url VARCHAR(500);"))
+            await conn.execute(text("ALTER TABLE instagram_campaigns ADD COLUMN IF NOT EXISTS last_scanned_at TIMESTAMP;"))
+            logger.info("PostgreSQL Instagram schema migration completed.")
         else:
             res = await conn.execute(text("PRAGMA table_info(users)"))
             cols = [row[1] for row in res.fetchall()]
@@ -45,6 +54,17 @@ async def run_db_migrations(conn):
             if "storage_limit_bytes" not in cols:
                 await conn.execute(text("ALTER TABLE users ADD COLUMN storage_limit_bytes BIGINT DEFAULT 10737418240"))
                 logger.info("Added storage_limit_bytes column to SQLite users table.")
+            for table, col, ddl in [
+                ("instagram_accounts", "session_cookie", "TEXT"),
+                ("instagram_accounts", "profile_picture_url", "VARCHAR(500)"),
+                ("instagram_accounts", "connection_type", "VARCHAR(20) DEFAULT 'SESSION' NOT NULL"),
+                ("instagram_campaigns", "post_url", "VARCHAR(500)"),
+                ("instagram_campaigns", "last_scanned_at", "DATETIME"),
+            ]:
+                info = await conn.execute(text(f"PRAGMA table_info({table})"))
+                existing = [row[1] for row in info.fetchall()]
+                if existing and col not in existing:
+                    await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
     except Exception as e:
         logger.warning(f"Database schema auto-migration notice: {e}")
 
