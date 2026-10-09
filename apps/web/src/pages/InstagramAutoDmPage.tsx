@@ -23,6 +23,7 @@ import {
   Film,
   Check,
   Maximize2,
+  X,
   ChevronRight
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
@@ -176,6 +177,12 @@ export const InstagramAutoDmPage: React.FC = () => {
   const [mediaItems, setMediaItems] = useState<any[]>([]);
   const [isLoadingMedia, setIsLoadingMedia] = useState(false);
   const [mediaError, setMediaError] = useState<string | null>(null);
+
+  // Dedicated Adjust Limits modal state
+  const [showLimitsModal, setShowLimitsModal] = useState(false);
+  const [limitsForm, setLimitsForm] = useState({ hourly_limit: 20, daily_limit: 60 });
+  const [isUpdatingLimits, setIsUpdatingLimits] = useState(false);
+  const [limitsError, setLimitsError] = useState<string | null>(null);
 
   // Detect OAuth redirect outcomes
   useEffect(() => {
@@ -358,6 +365,24 @@ export const InstagramAutoDmPage: React.FC = () => {
       setAccount(null);
     } catch (err) {
       console.error('Error disconnecting:', err);
+    }
+  };
+
+  const handleUpdateLimits = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLimitsError(null);
+    try {
+      setIsUpdatingLimits(true);
+      const updated = await api.updateInstagramLimits({
+        hourly_limit: Number(limitsForm.hourly_limit),
+        daily_limit: Number(limitsForm.daily_limit),
+      });
+      setAccount(updated);
+      setShowLimitsModal(false);
+    } catch (err: any) {
+      setLimitsError(err.message || 'Failed to update delivery limits');
+    } finally {
+      setIsUpdatingLimits(false);
     }
   };
 
@@ -735,8 +760,12 @@ export const InstagramAutoDmPage: React.FC = () => {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => {
-                  setConnectMode(account.connection_type === 'SESSION' ? 'session' : 'manual');
-                  setShowConnectModal(true);
+                  setLimitsForm({
+                    hourly_limit: account.hourly_limit || 20,
+                    daily_limit: account.daily_limit || 60,
+                  });
+                  setLimitsError(null);
+                  setShowLimitsModal(true);
                 }}
                 className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-xs font-medium transition-colors flex items-center gap-1.5"
               >
@@ -1653,6 +1682,142 @@ export const InstagramAutoDmPage: React.FC = () => {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Adjust Delivery Quotas Modal */}
+      {showLimitsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="w-full max-w-md bg-dark-card border border-white/10 rounded-2xl p-6 shadow-2xl space-y-5 my-8 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-400 flex items-center justify-center">
+                  <Sliders className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">Adjust Delivery Quotas</h3>
+                  <p className="text-[11px] text-gray-400">Manage hourly rate and daily DM caps for @{account?.username}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLimitsModal(false)}
+                className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {limitsError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>{limitsError}</span>
+              </div>
+            )}
+
+            {/* Explanatory callout */}
+            <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs text-blue-200 space-y-1.5 leading-relaxed">
+              <div className="flex items-center gap-1.5 font-bold text-blue-300">
+                <ShieldCheck className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                <span>RAGE Cloud Platform has Zero Restrictions!</span>
+              </div>
+              <p className="text-[11px] text-blue-300/80">
+                You have <strong>unlimited campaigns, unlimited trigger keywords, and unlimited files</strong>. These delivery throttles exist solely as an <strong>Anti-Ban Guardrail</strong> so Instagram spam detection doesn't action-block your account.
+              </p>
+            </div>
+
+            {/* Quick Presets */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 mb-2">Quick Presets</label>
+              <div className="grid grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLimitsForm({ hourly_limit: 20, daily_limit: 60 })}
+                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                    limitsForm.hourly_limit === 20 && limitsForm.daily_limit === 60
+                      ? 'bg-pink-500/20 border-pink-500 text-white font-bold'
+                      : 'bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <p className="text-xs">Safe (Anti-Ban)</p>
+                  <p className="text-[10px] text-pink-400 font-mono mt-0.5">20/hr • 60/day</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLimitsForm({ hourly_limit: 50, daily_limit: 150 })}
+                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                    limitsForm.hourly_limit === 50 && limitsForm.daily_limit === 150
+                      ? 'bg-pink-500/20 border-pink-500 text-white font-bold'
+                      : 'bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <p className="text-xs">Growth Mode</p>
+                  <p className="text-[10px] text-pink-400 font-mono mt-0.5">50/hr • 150/day</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLimitsForm({ hourly_limit: 100, daily_limit: 500 })}
+                  className={`p-2.5 rounded-xl border text-center transition-all ${
+                    limitsForm.hourly_limit === 100 && limitsForm.daily_limit === 500
+                      ? 'bg-pink-500/20 border-pink-500 text-white font-bold'
+                      : 'bg-white/5 border-white/5 text-gray-400 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <p className="text-xs">Turbo (High Vol)</p>
+                  <p className="text-[10px] text-pink-400 font-mono mt-0.5">100/hr • 500/day</p>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleUpdateLimits} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                    Hourly Cap (DMs / hr)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={limitsForm.hourly_limit}
+                    onChange={(e) => setLimitsForm({ ...limitsForm, hourly_limit: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Spread with human delay</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                    Daily Limit (DMs / day)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={5000}
+                    value={limitsForm.daily_limit}
+                    onChange={(e) => setLimitsForm({ ...limitsForm, daily_limit: Number(e.target.value) })}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">Resets every 24 hours</p>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
+                <button
+                  type="button"
+                  onClick={() => setShowLimitsModal(false)}
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUpdatingLimits}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white text-xs font-bold shadow-lg shadow-pink-600/20 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isUpdatingLimits ? 'Updating...' : 'Save & Apply'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

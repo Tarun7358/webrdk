@@ -89,3 +89,7 @@ class InstagramDmLogResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class UpdateInstagramLimitsRequest(BaseModel):
+    hourly_limit: int
+    daily_limit: int

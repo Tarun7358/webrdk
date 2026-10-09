@@ -174,6 +174,8 @@ export const api = {
     daily_limit?: number;
   }) => request<any>('/integrations/instagram/connect', { method: 'POST', body: JSON.stringify(data) }),
   disconnectInstagramAccount: () => request<any>('/integrations/instagram/disconnect', { method: 'POST' }),
+  updateInstagramLimits: (data: { hourly_limit: number; daily_limit: number }) =>
+    request<any>('/integrations/instagram/limits', { method: 'PUT', body: JSON.stringify(data) }),
   getInstagramMedia: () => request<any>('/integrations/instagram/media'),
   getInstagramCampaigns: () => request<any>('/integrations/instagram/campaigns'),
   createInstagramCampaign: (data: {

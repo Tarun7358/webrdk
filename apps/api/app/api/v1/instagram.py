@@ -15,7 +15,7 @@ from app.models.schema_models import User, InstagramAccount, InstagramCampaign, 
 from app.schemas.instagram_schemas import (
     ConnectInstagramRequest, ConnectInstagramSessionRequest, ConnectInstagramLoginRequest,
     InstagramAccountResponse, InstagramCampaignCreate, InstagramCampaignUpdate,
-    InstagramCampaignResponse, InstagramDmLogResponse
+    InstagramCampaignResponse, InstagramDmLogResponse, UpdateInstagramLimitsRequest
 )
 from app.services.instagram.service import InstagramAutoDmService
 
@@ -436,6 +436,28 @@ async def disconnect_instagram_account(
         account.is_active = False
         await db.commit()
     return {"status": "disconnected"}
+
+@router.put("/limits", response_model=InstagramAccountResponse)
+async def update_instagram_limits(
+    payload: UpdateInstagramLimitsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Adjust hourly velocity cap and daily quota limits.
+    """
+    stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id)
+    res = await db.execute(stmt)
+    account = res.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Instagram account not found")
+
+    # Allow custom values (min 1, max up to 10000 or custom)
+    account.hourly_limit = max(1, payload.hourly_limit)
+    account.daily_limit = max(1, payload.daily_limit)
+    await db.commit()
+    await db.refresh(account)
+    return account
 
 # ----------------- Campaign Management -----------------
 
