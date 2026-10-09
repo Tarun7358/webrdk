@@ -5,7 +5,7 @@ import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 from sqlalchemy import select, text, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
@@ -291,5 +291,14 @@ async def root_share_preview(
 ):
     from app.api.v1.shares import get_share_preview_html
     return await get_share_preview_html(short_code=short_code, request=request, db=db)
+
+@app.get("/ads.txt", response_class=PlainTextResponse, tags=["Monetization"])
+async def get_ads_txt():
+    return PlainTextResponse(
+        content="google.com, pub-7741649380959948, DIRECT, f08c47fec0942fa0\n",
+        media_type="text/plain",
+        headers={"Cache-Control": "public, max-age=3600"}
+    )
+
 
 
