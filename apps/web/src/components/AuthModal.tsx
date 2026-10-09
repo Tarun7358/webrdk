@@ -12,8 +12,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Gift,
-  KeyRound,
-  ShieldCheck
+  KeyRound
 } from 'lucide-react';
 
 export const AuthModal: React.FC = () => {
@@ -446,11 +445,6 @@ export const AuthModal: React.FC = () => {
             </div>
           )}
         </form>
-
-        <div className="mt-6 pt-4 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-slate-500">
-          <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Automated security via GoDaddy SMTP &bull; support@ragefps.in</span>
-        </div>
       </div>
     </div>
   );
