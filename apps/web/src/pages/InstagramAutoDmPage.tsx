@@ -19,7 +19,11 @@ import {
   Lock,
   Flame,
   ArrowRight,
-  ExternalLink
+  ExternalLink,
+  Film,
+  Check,
+  Maximize2,
+  ChevronRight
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -157,6 +161,16 @@ export const InstagramAutoDmPage: React.FC = () => {
   });
   const [isSavingCampaign, setIsSavingCampaign] = useState(false);
   const [campaignError, setCampaignError] = useState<string | null>(null);
+
+  // Superprofile 3-Step Wizard state
+  const [modalStep, setModalStep] = useState<1 | 2 | 3>(1);
+  const [keywordMode, setKeywordMode] = useState<'specific' | 'any'>('specific');
+  const [keywordInput, setKeywordInput] = useState('');
+  const [keywordsList, setKeywordsList] = useState<string[]>(['link', 'send', 'dl', 'download', 'pack']);
+  const [alsoReplyWithoutKeywords, setAlsoReplyWithoutKeywords] = useState(false);
+  const [dmType, setDmType] = useState<'button' | 'text'>('button');
+  const [buttonLabel, setButtonLabel] = useState('Download Link 🚀');
+  const [activeTemplateIdx, setActiveTemplateIdx] = useState(0);
 
   // Post picker (Superprofile-style grid)
   const [mediaItems, setMediaItems] = useState<any[]>([]);
@@ -370,32 +384,84 @@ export const InstagramAutoDmPage: React.FC = () => {
     }
   };
 
-  // Handle Campaign Submit
-  const handleSaveCampaign = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCampaignError(null);
-    if (!campaignForm.title || !campaignForm.file_id || !campaignForm.trigger_keywords) {
-      setCampaignError('Please provide a campaign title, select a file, and enter trigger keywords.');
-      return;
+  const handleAddKeyword = () => {
+    const kw = keywordInput.trim().toLowerCase();
+    if (!kw) return;
+    if (!keywordsList.includes(kw)) {
+      const updated = [...keywordsList, kw];
+      setKeywordsList(updated);
+      setCampaignForm(prev => ({ ...prev, trigger_keywords: updated.join(', ') }));
     }
+    setKeywordInput('');
+  };
+
+  const handleRemoveKeyword = (kwToRemove: string) => {
+    const updated = keywordsList.filter(k => k !== kwToRemove);
+    setKeywordsList(updated);
+    setCampaignForm(prev => ({ ...prev, trigger_keywords: updated.join(', ') }));
+  };
+
+  const handleInsertVariable = (varName: string) => {
+    const updated = [...campaignForm.dm_templates];
+    const current = updated[activeTemplateIdx] || '';
+    updated[activeTemplateIdx] = current ? `${current} ${varName}` : varName;
+    setCampaignForm(prev => ({ ...prev, dm_templates: updated }));
+  };
+
+  const handleNextStep = () => {
+    setCampaignError(null);
+    if (modalStep === 1) {
+      if (campaignForm.target_mode === 'SPECIFIC' && !campaignForm.post_url.trim()) {
+        setCampaignError('Please pick a Post/Reel from the grid or paste a link.');
+        return;
+      }
+      setModalStep(2);
+    } else if (modalStep === 2) {
+      if (keywordMode === 'specific' && keywordsList.length === 0) {
+        setCampaignError('Please add at least one trigger keyword (e.g. "link").');
+        return;
+      }
+      setModalStep(3);
+    }
+  };
+
+  const handlePrevStep = () => {
+    setCampaignError(null);
+    if (modalStep > 1) {
+      setModalStep((prev) => (prev - 1) as 1 | 2 | 3);
+    }
+  };
+
+  // Handle Campaign Submit
+  const handleSaveCampaign = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setCampaignError(null);
+
     const validTemplates = campaignForm.dm_templates.filter(t => t.trim().length > 0);
     if (validTemplates.length === 0) {
       setCampaignError('Please enter at least one DM template variation.');
       return;
     }
     if (campaignForm.target_mode === 'SPECIFIC' && !campaignForm.post_url.trim()) {
-      setCampaignError('Please pick a Post/Reel (or choose "Any" / "Next" Post/Reel).');
+      setCampaignError('Please pick a Post/Reel from the grid.');
       return;
     }
+    const finalFileId = campaignForm.file_id || files[0]?.id;
+    if (!finalFileId) {
+      setCampaignError('Please select or upload a vault file to deliver.');
+      return;
+    }
+    const finalTitle = campaignForm.title.trim() || (account ? `@${account.username} Reel Automation` : 'Instagram Reel Auto-DM');
+    const finalKeywords = keywordMode === 'any' ? '*' : (keywordsList.length > 0 ? keywordsList.join(', ') : 'link');
 
     try {
       setIsSavingCampaign(true);
       if (editingCampaign) {
         const updated = await api.updateInstagramCampaign(editingCampaign.id, {
-          title: campaignForm.title,
+          title: finalTitle,
           post_url: campaignForm.target_mode === 'SPECIFIC' ? (campaignForm.post_url.trim() || undefined) : undefined,
           target_mode: campaignForm.target_mode,
-          trigger_keywords: campaignForm.trigger_keywords,
+          trigger_keywords: finalKeywords,
           dm_templates: validTemplates,
           reply_comments: campaignForm.reply_comments.filter(r => r.trim().length > 0),
           send_comment_reply: campaignForm.send_comment_reply
@@ -403,11 +469,11 @@ export const InstagramAutoDmPage: React.FC = () => {
         setCampaigns(prev => prev.map(c => c.id === updated.id ? updated : c));
       } else {
         const created = await api.createInstagramCampaign({
-          file_id: campaignForm.file_id,
-          title: campaignForm.title,
+          file_id: finalFileId,
+          title: finalTitle,
           post_url: campaignForm.target_mode === 'SPECIFIC' ? (campaignForm.post_url.trim() || undefined) : undefined,
           target_mode: campaignForm.target_mode,
-          trigger_keywords: campaignForm.trigger_keywords,
+          trigger_keywords: finalKeywords,
           dm_templates: validTemplates,
           reply_comments: campaignForm.reply_comments.filter(r => r.trim().length > 0),
           send_comment_reply: campaignForm.send_comment_reply
@@ -461,8 +527,16 @@ export const InstagramAutoDmPage: React.FC = () => {
   };
 
   const openCreateModal = () => {
+    setModalStep(1);
     loadMedia();
     setEditingCampaign(null);
+    setKeywordsList(['link', 'send', 'dl', 'download', 'pack']);
+    setKeywordMode('specific');
+    setKeywordInput('');
+    setAlsoReplyWithoutKeywords(false);
+    setDmType('button');
+    setButtonLabel('Download Link 🚀');
+    setActiveTemplateIdx(0);
     setCampaignForm({
       title: '',
       file_id: files[0]?.id || '',
@@ -470,9 +544,9 @@ export const InstagramAutoDmPage: React.FC = () => {
       target_mode: 'SPECIFIC',
       trigger_keywords: 'link, send, dl, download, pack',
       dm_templates: [
+        'Hi there!\n\nAppreciate your comment 🙌 As promised, here\'s the link for you: {download_link}',
         'Hey @{username}! 🔥 Here is your requested download link for {file_name}: {download_link}',
-        'Yo @{username}! You asked for the link, here you go: {download_link} 🚀',
-        'Here is the download for {file_name}: {download_link} Enjoy! ✨'
+        'Yo @{username}! You asked for the link, here you go: {download_link} 🚀'
       ],
       reply_comments: [
         'Sent to your DM! Check your inbox 📩',
@@ -486,15 +560,25 @@ export const InstagramAutoDmPage: React.FC = () => {
   };
 
   const openEditModal = (c: InstagramCampaign) => {
+    setModalStep(1);
     loadMedia();
     setEditingCampaign(c);
+    const isAny = c.trigger_keywords === '*' || c.trigger_keywords === 'ANY';
+    const parsedList = isAny ? [] : c.trigger_keywords.split(',').map(k => k.trim()).filter(Boolean);
+    setKeywordsList(parsedList.length ? parsedList : ['link']);
+    setKeywordMode(isAny ? 'any' : 'specific');
+    setKeywordInput('');
+    setAlsoReplyWithoutKeywords(false);
+    setDmType('button');
+    setButtonLabel('Download Link 🚀');
+    setActiveTemplateIdx(0);
     setCampaignForm({
       title: c.title,
       file_id: c.file_id,
       post_url: c.post_url || '',
       target_mode: c.target_mode || 'SPECIFIC',
       trigger_keywords: c.trigger_keywords,
-      dm_templates: c.dm_templates.length > 0 ? c.dm_templates : ['Hey @{username}! Link: {download_link}'],
+      dm_templates: c.dm_templates.length > 0 ? c.dm_templates : ['Hi there! As promised, here is the link: {download_link}'],
       reply_comments: c.reply_comments.length > 0 ? c.reply_comments : ['Sent to your DM! 📩'],
       send_comment_reply: c.send_comment_reply
     });
@@ -1573,48 +1657,397 @@ export const InstagramAutoDmPage: React.FC = () => {
         </div>
       )}
 
-      {/* Campaign Create/Edit Modal */}
+      {/* Superprofile 3-Step Campaign Wizard Modal */}
       {showCampaignModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-dark-card border border-white/10 rounded-2xl p-6 shadow-2xl space-y-5 my-8 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-white/5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto">
+          <div className="w-full max-w-lg bg-[#0e121a] border border-white/10 rounded-3xl shadow-2xl overflow-hidden my-6 animate-in zoom-in-95 duration-200 flex flex-col">
+            
+            {/* Header (All Steps) */}
+            <div className="p-4 px-5 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
               <div className="flex items-center gap-2.5">
-                <Flame className="w-5 h-5 text-pink-400" />
-                <h3 className="text-lg font-bold text-white">
-                  {editingCampaign ? 'Edit Auto-DM Campaign' : 'Create Auto-DM Campaign'}
+                <div className="w-7 h-7 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center">
+                  <Film className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-bold text-white tracking-tight">
+                  When someone comments on your Post/Reel
                 </h3>
               </div>
               <button
                 onClick={() => setShowCampaignModal(false)}
-                className="text-gray-400 hover:text-white text-sm"
+                className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center transition-colors text-xs"
               >
                 ✕
               </button>
             </div>
 
+            {/* Error Banner */}
             {campaignError && (
-              <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+              <div className="m-4 mb-0 p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 <span>{campaignError}</span>
               </div>
             )}
 
-            <form onSubmit={handleSaveCampaign} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">
-                  Campaign Title *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={campaignForm.title}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, title: e.target.value })}
-                  placeholder="e.g. Photoshop 2026 LUTs Pack Reel"
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500"
-                />
-              </div>
+            {/* Modal Body: STEP 1 */}
+            {modalStep === 1 && (
+              <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                {/* Account Avatar Header */}
+                <div className="flex flex-col items-center justify-center space-y-1.5 pt-1">
+                  <div className="relative p-1 rounded-full bg-gradient-to-tr from-amber-400 via-rose-500 to-purple-600 shadow-lg shadow-pink-500/20">
+                    <div className="p-0.5 bg-[#0e121a] rounded-full">
+                      {account?.profile_picture_url ? (
+                        <img
+                          src={account.profile_picture_url}
+                          alt={account.username}
+                          referrerPolicy="no-referrer"
+                          className="w-16 h-16 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 text-white font-bold flex items-center justify-center text-xl">
+                          {(account?.username || 'U').slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-gray-200 tracking-wide font-mono">
+                    @{account?.username || 'your_instagram'}
+                  </span>
+                </div>
 
-              {!editingCampaign && (
+                {/* The Comment is on... */}
+                <div className="space-y-3">
+                  <label className="block text-xs font-semibold text-gray-300">
+                    The Comment is on...
+                  </label>
+
+                  {/* 3 Tabs */}
+                  <div className="grid grid-cols-3 gap-2">
+                    {([
+                      ['SPECIFIC', 'Specific Post/Reel'],
+                      ['ANY', 'Any Post/Reel'],
+                      ['NEXT', 'Next Post/Reel']
+                    ] as const).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setCampaignForm({ ...campaignForm, target_mode: mode })}
+                        className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all text-center ${
+                          campaignForm.target_mode === mode
+                            ? 'bg-blue-500/10 border-blue-500/40 text-blue-400 shadow-sm'
+                            : 'bg-white/[0.02] border-white/10 text-gray-400 hover:text-white'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Specific Post 3-Column Grid */}
+                  {campaignForm.target_mode === 'SPECIFIC' && (
+                    <div className="space-y-3 pt-1">
+                      {isLoadingMedia ? (
+                        <div className="py-12 text-center text-xs text-gray-400 flex flex-col items-center justify-center gap-2 bg-white/[0.01] rounded-2xl border border-white/5">
+                          <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+                          <span>Loading your Posts and Reels...</span>
+                        </div>
+                      ) : mediaItems.length > 0 ? (
+                        <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
+                          {mediaItems.map((m) => {
+                            const url = `https://www.instagram.com/p/${m.code}/`;
+                            const selected = campaignForm.post_url.includes(`/${m.code}`);
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setCampaignForm({ ...campaignForm, post_url: url })}
+                                className={`group relative aspect-[4/5] rounded-xl overflow-hidden border-2 transition-all ${
+                                  selected
+                                    ? 'border-blue-500 ring-2 ring-blue-500/40'
+                                    : 'border-white/5 hover:border-white/30'
+                                }`}
+                                title={m.caption || 'Post'}
+                              >
+                                {m.thumbnail_url ? (
+                                  <img
+                                    src={m.thumbnail_url}
+                                    alt={m.caption || 'Instagram thumbnail'}
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-white/5 flex items-center justify-center text-gray-500 text-[10px]">
+                                    Post
+                                  </div>
+                                )}
+                                
+                                {/* Bottom right expand icon */}
+                                <div className="absolute bottom-1 right-1 w-5 h-5 rounded-md bg-black/60 backdrop-blur-xs flex items-center justify-center text-white/80">
+                                  <Maximize2 className="w-3 h-3" />
+                                </div>
+
+                                {/* Bottom left comment count */}
+                                <div className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-[9px] text-white/90 font-mono">
+                                  💬 {m.comment_count}
+                                </div>
+
+                                {selected && (
+                                  <div className="absolute top-1 right-1 w-5 h-5 rounded-full bg-blue-500 text-white text-[11px] font-bold flex items-center justify-center shadow-md">
+                                    <Check className="w-3 h-3 stroke-[3]" />
+                                  </div>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                          {mediaError || 'No posts found. You can paste a link below.'}
+                        </div>
+                      )}
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="url"
+                          value={campaignForm.post_url}
+                          onChange={(e) => setCampaignForm({ ...campaignForm, post_url: e.target.value })}
+                          placeholder="...or paste a Reel/Post link: https://www.instagram.com/reel/..."
+                          className="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-blue-500 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={loadMedia}
+                          className="px-2.5 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs flex items-center gap-1 flex-shrink-0"
+                          title="Refresh posts"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingMedia ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {campaignForm.target_mode === 'ANY' && (
+                    <div className="p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-xs text-purple-300 space-y-1">
+                      <p className="font-semibold">Watching your 5 latest Posts/Reels</p>
+                      <p className="text-[11px] text-gray-400">
+                        Whenever someone comments on any of your 5 most recent posts, they'll receive your DM automatically.
+                      </p>
+                    </div>
+                  )}
+
+                  {campaignForm.target_mode === 'NEXT' && (
+                    <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-xs text-indigo-300 space-y-1">
+                      <p className="font-semibold">Watching your next published Post/Reel</p>
+                      <p className="text-[11px] text-gray-400">
+                        This automation will only trigger on posts/reels published after you create this campaign.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Campaign Name (Optional customized title) */}
+                <div className="pt-2 border-t border-white/5">
+                  <label className="block text-xs font-semibold text-gray-400 mb-1">
+                    Campaign Name (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={campaignForm.title}
+                    onChange={(e) => setCampaignForm({ ...campaignForm, title: e.target.value })}
+                    placeholder="e.g. Photoshop 2026 LUTs Pack Reel"
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Modal Body: STEP 2 */}
+            {modalStep === 2 && (
+              <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                {/* 2 Tabs: Specific keyword vs Any comment */}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKeywordMode('specific');
+                      if (campaignForm.trigger_keywords === '*') {
+                        setCampaignForm({ ...campaignForm, trigger_keywords: keywordsList.join(', ') || 'link' });
+                      }
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center ${
+                      keywordMode === 'specific'
+                        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400 shadow-sm'
+                        : 'bg-white/[0.02] border-white/10 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Specific keyword
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setKeywordMode('any');
+                      setCampaignForm({ ...campaignForm, trigger_keywords: '*' });
+                    }}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all text-center ${
+                      keywordMode === 'any'
+                        ? 'bg-blue-500/10 border-blue-500/40 text-blue-400 shadow-sm'
+                        : 'bg-white/[0.02] border-white/10 text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Any comment
+                  </button>
+                </div>
+
+                {/* Gold Notice Box */}
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>
+                    You have <strong>unlimited keywords</strong> enabled on RAGE Cloud. Automate as many words as you want!
+                  </span>
+                </div>
+
+                {/* Keywords input & chips (Only in specific keyword mode) */}
+                {keywordMode === 'specific' && (
+                  <div className="space-y-3">
+                    <label className="block text-xs font-semibold text-gray-300">
+                      Should include any of these:
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={keywordInput}
+                        onChange={(e) => setKeywordInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddKeyword();
+                          }
+                        }}
+                        placeholder="Type a keyword (min. 1 characters)"
+                        className="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-blue-500 font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddKeyword}
+                        disabled={!keywordInput.trim()}
+                        className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white text-xs font-bold transition-colors flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Add</span>
+                      </button>
+                    </div>
+
+                    {/* Keywords Tag Chips */}
+                    {keywordsList.length > 0 && (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {keywordsList.map((kw) => (
+                          <span
+                            key={kw}
+                            className="px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 font-mono text-xs flex items-center gap-1.5"
+                          >
+                            <span>#{kw}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveKeyword(kw)}
+                              className="text-blue-400/60 hover:text-red-400 text-xs font-bold"
+                            >
+                              ✕
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                      Keywords are not case-sensitive (e.g., "Hello" and "hello" are treated the same). Automations trigger only on exact keyword matches — for example, the keyword "ai" will match "ai" but not "pain."
+                    </p>
+                  </div>
+                )}
+
+                {/* Toggles */}
+                <div className="space-y-4 pt-2 border-t border-white/5">
+                  {/* Toggle 1: Also reply without keywords */}
+                  <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-white block">
+                        Also reply without your keywords
+                      </span>
+                      <p className="text-[11px] text-gray-400 leading-relaxed">
+                        Even if a comment doesn't use your exact keywords, AI checks its meaning and replies when it matches what you describe.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAlsoReplyWithoutKeywords(!alsoReplyWithoutKeywords)}
+                      className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 mt-0.5 ${
+                        alsoReplyWithoutKeywords ? 'bg-blue-600' : 'bg-white/10'
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                          alsoReplyWithoutKeywords ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Toggle 2: Auto-reply to comments on post */}
+                  <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-xs font-bold text-white">
+                        Auto-Reply to comments on the post
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setCampaignForm({ ...campaignForm, send_comment_reply: !campaignForm.send_comment_reply })}
+                        className={`w-11 h-6 rounded-full transition-colors relative flex-shrink-0 ${
+                          campaignForm.send_comment_reply ? 'bg-blue-600' : 'bg-white/10'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform ${
+                            campaignForm.send_comment_reply ? 'translate-x-5' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {campaignForm.send_comment_reply && (
+                      <div className="space-y-2 pt-2 border-t border-white/5">
+                        <label className="block text-[11px] font-medium text-gray-400">
+                          Public Comment Reply Variations (Rotated):
+                        </label>
+                        {campaignForm.reply_comments.map((rep, idx) => (
+                          <input
+                            key={idx}
+                            type="text"
+                            value={rep}
+                            onChange={(e) => {
+                              const updated = [...campaignForm.reply_comments];
+                              updated[idx] = e.target.value;
+                              setCampaignForm({ ...campaignForm, reply_comments: updated });
+                            }}
+                            className="w-full px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-blue-500 font-mono"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Modal Body: STEP 3 */}
+            {modalStep === 3 && (
+              <div className="p-6 space-y-5 overflow-y-auto max-h-[70vh]">
+                {/* Header */}
+                <div>
+                  <h4 className="text-sm font-bold text-white">Then send the primary DM...</h4>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Write the message you want to auto-send with a button that takes them to your link or product.
+                  </p>
+                </div>
+
+                {/* Vault File Selection */}
                 <div>
                   <label className="block text-xs font-semibold text-gray-300 mb-1">
                     Select Vault File to Auto-Deliver *
@@ -1623,7 +2056,7 @@ export const InstagramAutoDmPage: React.FC = () => {
                     required
                     value={campaignForm.file_id}
                     onChange={(e) => setCampaignForm({ ...campaignForm, file_id: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500"
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-blue-500"
                   >
                     {files.map((file) => (
                       <option key={file.id} value={file.id} className="bg-dark-card text-white">
@@ -1632,255 +2065,188 @@ export const InstagramAutoDmPage: React.FC = () => {
                     ))}
                   </select>
                   <p className="text-[10px] text-gray-500 mt-1">
-                    The short monetization link for this file will be automatically injected as <code className="text-pink-300">{'{download_link}'}</code>.
+                    Your short monetized download link will be inserted via <code className="text-blue-300 font-mono">{'{download_link}'}</code>.
                   </p>
                 </div>
-              )}
 
-              {/* Post/Reel picker (Superprofile Style) */}
-              <div className="space-y-3 pt-1">
-                {account && (
-                  <div className="flex flex-col items-center justify-center py-2 space-y-1.5 border-b border-white/5 pb-3">
-                    <div className="relative p-1 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 shadow-md shadow-pink-500/20">
-                      <div className="p-0.5 bg-dark-card rounded-full">
-                        {account.profile_picture_url ? (
-                          <img
-                            src={account.profile_picture_url}
-                            alt={account.username}
-                            referrerPolicy="no-referrer"
-                            className="w-14 h-14 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 rounded-full bg-gradient-to-tr from-pink-500 to-purple-600 text-white font-bold flex items-center justify-center text-lg">
-                            {account.username.slice(0, 1).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <span className="text-xs font-bold text-white tracking-wide">
-                      @{account.username}
-                    </span>
-                  </div>
-                )}
-
-                <label className="block text-xs font-semibold text-gray-300">
-                  The Comment is on...
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {([
-                    ['SPECIFIC', 'Specific Post/Reel'],
-                    ['ANY', 'Any Post/Reel'],
-                    ['NEXT', 'Next Post/Reel']
-                  ] as const).map(([mode, label]) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setCampaignForm({ ...campaignForm, target_mode: mode })}
-                      className={`py-2 px-2 rounded-xl text-[11px] font-bold border transition-all ${
-                        campaignForm.target_mode === mode
-                          ? 'bg-pink-500/15 border-pink-500/50 text-pink-300'
-                          : 'bg-black/30 border-white/10 text-gray-400 hover:text-white'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {campaignForm.target_mode === 'SPECIFIC' && (
-                  <div className="space-y-2">
-                    {isLoadingMedia ? (
-                      <div className="py-8 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
-                        <div className="w-4 h-4 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
-                        Loading your posts from Instagram...
-                      </div>
-                    ) : mediaItems.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2 max-h-72 overflow-y-auto pr-1">
-                        {mediaItems.map((m) => {
-                          const url = `https://www.instagram.com/p/${m.code}/`;
-                          const selected = campaignForm.post_url.includes(`/${m.code}`);
-                          return (
-                            <button
-                              key={m.id}
-                              type="button"
-                              onClick={() => setCampaignForm({ ...campaignForm, post_url: url })}
-                              className={`relative aspect-[4/5] rounded-xl overflow-hidden border-2 transition-all ${
-                                selected ? 'border-pink-500 ring-2 ring-pink-500/40' : 'border-transparent hover:border-white/30'
-                              }`}
-                              title={m.caption || 'Post'}
-                            >
-                              {m.thumbnail_url ? (
-                                <img
-                                  src={m.thumbnail_url}
-                                  alt={m.caption || 'Instagram post'}
-                                  referrerPolicy="no-referrer"
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-white/5 flex items-center justify-center text-gray-500 text-[10px]">No preview</div>
-                              )}
-                              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/70 text-[10px] text-white">
-                                💬 {m.comment_count}
-                              </span>
-                              {selected && (
-                                <span className="absolute top-1 right-1 w-5 h-5 rounded-full bg-pink-500 text-white text-[11px] flex items-center justify-center">✓</span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-amber-400">{mediaError || 'No posts loaded.'}</p>
-                    )}
-                    <input
-                      type="url"
-                      value={campaignForm.post_url}
-                      onChange={(e) => setCampaignForm({ ...campaignForm, post_url: e.target.value })}
-                      placeholder="...or paste a Reel/Post link: https://www.instagram.com/reel/..."
-                      className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
-                    />
-                    <button type="button" onClick={loadMedia} className="text-[11px] text-pink-400 hover:text-pink-300">
-                      ↻ Refresh posts
-                    </button>
-                  </div>
-                )}
-
-                {campaignForm.target_mode === 'ANY' && (
-                  <p className="text-[11px] text-gray-400 p-3 rounded-xl bg-black/30 border border-white/5">
-                    Comments on your 5 most recent posts/reels are watched automatically.
-                  </p>
-                )}
-                {campaignForm.target_mode === 'NEXT' && (
-                  <p className="text-[11px] text-gray-400 p-3 rounded-xl bg-black/30 border border-white/5">
-                    Only posts/reels you publish after creating this campaign are watched.
-                  </p>
-                )}
-                <p className="text-[10px] text-emerald-400/80">
-                  ⚡ Live: new comments are checked automatically about every 90 seconds. No button needed.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1">
-                  Trigger Keywords (Comma separated) *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={campaignForm.trigger_keywords}
-                  onChange={(e) => setCampaignForm({ ...campaignForm, trigger_keywords: e.target.value })}
-                  placeholder="link, send, download, pack, preset"
-                  className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  Matches comments containing any of these words (case-insensitive).
-                </p>
-              </div>
-
-              {/* Spintax DM Templates */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-gray-300">
-                    Spintax DM Templates (Auto-Rotated) *
+                {/* DM Type Dropdown */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">
+                    DM type
                   </label>
-                  <button
-                    type="button"
-                    onClick={() => setCampaignForm({
-                      ...campaignForm,
-                      dm_templates: [...campaignForm.dm_templates, 'Hey @{username}! Here is your file: {download_link}']
-                    })}
-                    className="text-[11px] text-pink-400 hover:text-pink-300 font-medium flex items-center gap-1"
+                  <select
+                    value={dmType}
+                    onChange={(e) => setDmType(e.target.value as 'button' | 'text')}
+                    className="w-full px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-blue-500"
                   >
-                    <Plus className="w-3 h-3" /> Add Variation
-                  </button>
+                    <option value="button" className="bg-dark-card text-white">Text + Button</option>
+                    <option value="text" className="bg-dark-card text-white">Direct Text Message</option>
+                  </select>
                 </div>
+
+                {/* DM Content Textarea Card */}
                 <div className="space-y-2">
-                  {campaignForm.dm_templates.map((tpl, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-gray-500 w-5 text-right">{idx + 1}.</span>
-                      <input
-                        type="text"
-                        value={tpl}
-                        onChange={(e) => {
-                          const updated = [...campaignForm.dm_templates];
-                          updated[idx] = e.target.value;
-                          setCampaignForm({ ...campaignForm, dm_templates: updated });
-                        }}
-                        className="flex-1 px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
-                      />
-                      {campaignForm.dm_templates.length > 1 && (
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-300">
+                      DM content
+                    </label>
+                    {campaignForm.dm_templates.length > 1 && (
+                      <span className="text-[11px] text-gray-400 font-mono">
+                        Template {activeTemplateIdx + 1} of {campaignForm.dm_templates.length}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-black/40 p-3 space-y-3">
+                    <textarea
+                      rows={5}
+                      value={campaignForm.dm_templates[activeTemplateIdx] || ''}
+                      onChange={(e) => {
+                        const updated = [...campaignForm.dm_templates];
+                        updated[activeTemplateIdx] = e.target.value;
+                        setCampaignForm({ ...campaignForm, dm_templates: updated });
+                      }}
+                      placeholder="Hi there! Appreciate your comment 🙌 As promised, here's the link: {download_link}"
+                      className="w-full bg-transparent text-white text-xs focus:outline-none resize-none font-sans leading-relaxed"
+                    />
+
+                    {/* Variable insertion buttons & Character count */}
+                    <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <button
                           type="button"
-                          onClick={() => {
-                            const updated = campaignForm.dm_templates.filter((_, i) => i !== idx);
-                            setCampaignForm({ ...campaignForm, dm_templates: updated });
-                          }}
-                          className="text-gray-500 hover:text-red-400 p-1"
+                          onClick={() => handleInsertVariable('{username}')}
+                          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-[11px] font-mono transition-colors"
                         >
-                          ✕
+                          # username
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => handleInsertVariable('{file_name}')}
+                          className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-[11px] font-mono transition-colors"
+                        >
+                          # file_name
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleInsertVariable('{download_link}')}
+                          className="px-2 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-[11px] font-mono font-bold transition-colors"
+                        >
+                          # download_link
+                        </button>
+                      </div>
+
+                      <span className="text-[11px] text-gray-500 font-mono">
+                        {(campaignForm.dm_templates[activeTemplateIdx] || '').length}/900
+                      </span>
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Add Template Variation */}
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-center gap-1.5">
+                      {campaignForm.dm_templates.map((_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setActiveTemplateIdx(i)}
+                          className={`w-6 h-6 rounded-lg text-xs font-mono font-bold transition-all ${
+                            activeTemplateIdx === i
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-white/5 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newTpl = `Hey @{username}! Here is your file: {download_link}`;
+                        setCampaignForm({
+                          ...campaignForm,
+                          dm_templates: [...campaignForm.dm_templates, newTpl]
+                        });
+                        setActiveTemplateIdx(campaignForm.dm_templates.length);
+                      }}
+                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Variation (Spintax)</span>
+                    </button>
+                  </div>
                 </div>
-                <p className="text-[10px] text-gray-500 mt-1.5">
-                  Available tags: <code className="text-pink-300">{'{username}'}</code>, <code className="text-pink-300">{'{file_name}'}</code>, <code className="text-pink-300">{'{download_link}'}</code>
-                </p>
-              </div>
 
-              {/* Public Comment Replies */}
-              <div className="p-4 rounded-xl bg-black/30 border border-white/5 space-y-3">
-                <label className="flex items-center gap-2.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={campaignForm.send_comment_reply}
-                    onChange={(e) => setCampaignForm({ ...campaignForm, send_comment_reply: e.target.checked })}
-                    className="w-4 h-4 rounded text-pink-500 focus:ring-0 focus:outline-none"
-                  />
-                  <span className="text-xs font-semibold text-white">
-                    Auto-reply to commenter's public comment
-                  </span>
-                </label>
-
-                {campaignForm.send_comment_reply && (
-                  <div className="space-y-2 pt-2 border-t border-white/5">
-                    <label className="block text-[11px] font-medium text-gray-400">
-                      Public Comment Reply Variations
-                    </label>
-                    {campaignForm.reply_comments.map((rep, idx) => (
+                {/* Button Box (Dashed card like Screenshot 3) */}
+                {dmType === 'button' && (
+                  <div className="p-4 rounded-2xl border-2 border-dashed border-white/15 bg-white/[0.01] space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                        <ArrowRight className="w-3.5 h-3.5 text-blue-400" /> Button Preview
+                      </span>
+                      <span className="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">Auto-Linked</span>
+                    </div>
+                    <div className="flex items-center gap-2">
                       <input
-                        key={idx}
                         type="text"
-                        value={rep}
-                        onChange={(e) => {
-                          const updated = [...campaignForm.reply_comments];
-                          updated[idx] = e.target.value;
-                          setCampaignForm({ ...campaignForm, reply_comments: updated });
-                        }}
-                        className="w-full px-3 py-1.5 rounded-xl bg-black/40 border border-white/10 text-white text-xs focus:outline-none focus:border-pink-500 font-mono"
+                        value={buttonLabel}
+                        onChange={(e) => setButtonLabel(e.target.value)}
+                        placeholder="Button Text (e.g. Download File 🚀)"
+                        className="flex-1 px-3 py-2 rounded-xl bg-black/40 border border-white/10 text-white text-xs font-medium focus:outline-none focus:border-blue-500"
                       />
-                    ))}
+                    </div>
+                    <p className="text-[10px] text-gray-500">
+                      When recipients tap this button, it automatically takes them to your short link for this file.
+                    </p>
                   </div>
                 )}
               </div>
+            )}
 
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
+            {/* Bottom Navigation Bar (All Steps) */}
+            <div className="p-4 px-6 border-t border-white/5 flex items-center justify-between bg-white/[0.02]">
+              <span className="text-xs text-gray-400 font-medium">
+                Step {modalStep} of 3
+              </span>
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowCampaignModal(false)}
-                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-medium"
+                  onClick={handlePrevStep}
+                  disabled={modalStep === 1}
+                  className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-gray-300 text-xs font-semibold transition-colors"
                 >
-                  Cancel
+                  Back
                 </button>
-                <button
-                  type="submit"
-                  disabled={isSavingCampaign}
-                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white text-xs font-bold shadow-lg shadow-pink-600/20 disabled:opacity-50"
-                >
-                  {isSavingCampaign ? 'Saving...' : editingCampaign ? 'Update Campaign' : 'Create Campaign'}
-                </button>
+                {modalStep < 3 ? (
+                  <button
+                    type="button"
+                    onClick={handleNextStep}
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-600/20 transition-all flex items-center gap-1"
+                  >
+                    <span>Next</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSaveCampaign()}
+                    disabled={isSavingCampaign}
+                    className="px-6 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg shadow-blue-600/30 transition-all disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isSavingCampaign ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Publishing...</span>
+                      </>
+                    ) : (
+                      <span>{editingCampaign ? 'Update Automation' : 'Publish Automation'}</span>
+                    )}
+                  </button>
+                )}
               </div>
-            </form>
+            </div>
+
           </div>
         </div>
       )}

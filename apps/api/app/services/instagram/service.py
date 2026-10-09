@@ -49,6 +49,9 @@ class InstagramAutoDmService:
         if not text or not trigger_keywords_raw:
             return False
 
+        if trigger_keywords_raw.strip() in ("*", "ANY", "any"):
+            return True
+
         clean_text = text.lower().strip()
         # Parse comma-separated or whitespace keywords
         keywords = [k.strip().lower() for k in trigger_keywords_raw.split(",") if k.strip()]
