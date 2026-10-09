@@ -126,17 +126,36 @@ export const Sidebar: React.FC = () => {
           {links.map((link) => {
             const Icon = link.icon;
             const isItemLocked = (link as any).isLocked;
+
+            if (isItemLocked) {
+              return (
+                <div
+                  key={link.to}
+                  title="Locked — this feature is currently unavailable"
+                  className="flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs text-slate-500 bg-white/[0.02] border border-white/5 cursor-not-allowed select-none transition-all"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Icon className="w-4 h-4 shrink-0 text-slate-500" />
+                    <span className="font-semibold truncate text-slate-400">{link.label}</span>
+                  </div>
+                  <span
+                    className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-400/90 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md shrink-0 ml-2 shadow-sm"
+                  >
+                    <Lock className="w-2.5 h-2.5" />
+                    <span>Locked</span>
+                  </span>
+                </div>
+              );
+            }
+
             return (
               <NavLink
                 key={link.to}
                 to={link.to}
-                title={isItemLocked ? `${link.label} (Feature temporarily locked)` : undefined}
                 className={({ isActive }) =>
                   `flex items-center justify-between px-3.5 py-2.5 rounded-xl font-medium text-xs transition-all group ${
                     isActive
                       ? 'bg-rose-500/15 text-white border border-rose-500/30 shadow-md shadow-rose-500/10'
-                      : isItemLocked
-                      ? 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
                       : 'text-slate-400 hover:text-white hover:bg-white/5'
                   }`
                 }
@@ -145,15 +164,6 @@ export const Sidebar: React.FC = () => {
                   <Icon className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-slate-200 transition-colors" />
                   <span className="font-semibold truncate">{link.label}</span>
                 </div>
-                {isItemLocked && (
-                  <span
-                    className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded-md shrink-0 ml-2 shadow-sm"
-                    title="Feature temporarily locked"
-                  >
-                    <Lock className="w-2.5 h-2.5" />
-                    <span>Locked</span>
-                  </span>
-                )}
               </NavLink>
             );
           })}

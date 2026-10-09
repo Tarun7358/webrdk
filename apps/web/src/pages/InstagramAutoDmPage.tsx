@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import {
   MessageSquare,
@@ -90,15 +89,10 @@ interface InstagramDmLog {
   created_at: string;
 }
 
+export const IS_INSTAGRAM_LOCKED = true;
+
 export const InstagramAutoDmPage: React.FC = () => {
-  const { user } = useAuth();
   const navigate = useNavigate();
-  const isPrivileged = Boolean(
-    user?.role === 'OWNER' ||
-    user?.role === 'SUPER_ADMIN' ||
-    user?.email === 'rdxyzprvt@gmail.com'
-  );
-  const [adminPreviewLocked, setAdminPreviewLocked] = useState(false);
 
   const [account, setAccount] = useState<InstagramAccount | null>(null);
   const [campaigns, setCampaigns] = useState<InstagramCampaign[]>([]);
@@ -275,19 +269,19 @@ export const InstagramAutoDmPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!isPrivileged) {
+    if (IS_INSTAGRAM_LOCKED) {
       setIsLoading(false);
       return;
     }
     fetchData();
-  }, [fetchData, isPrivileged]);
+  }, [fetchData]);
 
   useEffect(() => {
-    if (!isPrivileged) return;
+    if (IS_INSTAGRAM_LOCKED) return;
     if (activeTab === 'logs') {
       fetchLogs();
     }
-  }, [activeTab, fetchLogs, isPrivileged]);
+  }, [activeTab, fetchLogs]);
 
   // Handle in-app Instagram Login (auto-captures session, no cookie copy needed)
   const handleInstagramLogin = async (e: React.FormEvent) => {
@@ -633,28 +627,14 @@ export const InstagramAutoDmPage: React.FC = () => {
     setTimeout(() => setCopiedText(null), 2000);
   };
 
-  // Locked Feature Guard for standard users or admin preview
-  if (!isPrivileged || adminPreviewLocked) {
+  // Locked Feature Guard: tool is completely locked and will not open
+  if (IS_INSTAGRAM_LOCKED) {
     return (
       <div className="min-h-[75vh] flex items-center justify-center p-4 animate-in fade-in duration-300">
         <div className="w-full max-w-xl p-8 sm:p-10 rounded-3xl bg-[#0d1424]/90 border border-white/10 backdrop-blur-2xl shadow-2xl relative overflow-hidden text-center space-y-6">
           {/* Subtle Ambient Glows */}
           <div className="absolute -top-24 -left-24 w-48 h-48 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
-
-          {/* Admin Mode Controls */}
-          {isPrivileged && (
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-mono font-semibold">
-              <span className="w-2 h-2 rounded-full bg-amber-400" />
-              <span>Admin Preview Mode Active</span>
-              <button
-                onClick={() => setAdminPreviewLocked(false)}
-                className="underline hover:text-white transition-colors ml-1 font-bold text-amber-200"
-              >
-                Exit Preview & Open Tool
-              </button>
-            </div>
-          )}
 
           {/* Icon Badge */}
           <div className="relative mx-auto w-20 h-20 rounded-3xl bg-gradient-to-tr from-amber-500/20 via-rose-500/15 to-purple-500/20 border border-amber-500/30 flex items-center justify-center shadow-xl shadow-amber-500/10">
@@ -667,13 +647,13 @@ export const InstagramAutoDmPage: React.FC = () => {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[11px] font-bold uppercase tracking-wider">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
-              <span>Feature Temporarily Locked</span>
+              <span>Feature Locked</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-black text-white font-display tracking-tight">
-              Instagram Auto-DM Engine
+              Instagram Auto-DM is Locked
             </h1>
             <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed">
-              This feature is temporarily locked for all users while our engineering team performs core infrastructure upgrades, rate-limit calibrations, and anti-ban enhancements.
+              This feature is currently locked and unavailable. It has been disabled by platform administration for scheduled maintenance and safety upgrades.
             </p>
           </div>
 
@@ -682,10 +662,10 @@ export const InstagramAutoDmPage: React.FC = () => {
             <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
               <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>Account Safe</span>
+                <span>Protected</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-normal">
-                Connected accounts and configurations remain safe and intact.
+                All existing configurations remain safely locked and stored.
               </p>
             </div>
 
@@ -695,17 +675,17 @@ export const InstagramAutoDmPage: React.FC = () => {
                 <span>Engine Upgrade</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-normal">
-                Deploying faster DM dispatch and anti-spam protection.
+                Engine is undergoing stability and anti-ban calibrations.
               </p>
             </div>
 
             <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/5 space-y-1">
               <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs">
                 <Clock className="w-3.5 h-3.5" />
-                <span>Returning Soon</span>
+                <span>Coming Soon</span>
               </div>
               <p className="text-[11px] text-slate-400 leading-normal">
-                Access will be re-enabled for all members once updates conclude.
+                Access will be unlocked once updates are completed.
               </p>
             </div>
           </div>
@@ -742,30 +722,6 @@ export const InstagramAutoDmPage: React.FC = () => {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Administrator Maintenance Notice */}
-      {isPrivileged && (
-        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg shadow-amber-500/5">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center shrink-0">
-              <Lock className="w-3.5 h-3.5 text-amber-400" />
-            </div>
-            <div>
-              <div className="font-bold text-amber-200">Public Maintenance Lock Active</div>
-              <div className="text-[11px] text-amber-300/80">
-                Instagram Auto-DM is currently locked for all standard users. You have administrator bypass privileges.
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => setAdminPreviewLocked(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/30 font-semibold text-[11px] transition-all shrink-0 self-start sm:self-center"
-          >
-            Preview Public Lock Screen
-          </button>
-        </div>
-      )}
-
-      {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/5">
         <div>
           <div className="flex items-center gap-2 mb-1.5">

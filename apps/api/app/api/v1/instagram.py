@@ -28,12 +28,10 @@ IS_INSTAGRAM_LOCKED = True
 
 async def require_instagram_access(current_user: User = Depends(get_current_user)) -> User:
     if IS_INSTAGRAM_LOCKED:
-        is_admin = current_user.role in ["OWNER", "SUPER_ADMIN"] or current_user.email == "rdxyzprvt@gmail.com"
-        if not is_admin:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Instagram Auto-DM feature is temporarily locked for scheduled maintenance."
-            )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Instagram Auto-DM feature is currently locked and unavailable."
+        )
     return current_user
 
 # ----------------- Meta 1-Click OAuth Handlers (Superprofile Flow) -----------------
