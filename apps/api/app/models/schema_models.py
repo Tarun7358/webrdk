@@ -312,12 +312,15 @@ class InstagramAccount(BaseModel):
     __tablename__ = "instagram_accounts"
 
     user_id = Column(String(36), ForeignKey("users.id"), nullable=False, unique=True, index=True)
-    instagram_business_id = Column(String(100), nullable=False)
+    instagram_business_id = Column(String(100), nullable=True)
     facebook_page_id = Column(String(100), nullable=True)
     username = Column(String(100), nullable=False)
-    access_token = Column(Text, nullable=False) # Long-lived Meta Graph API token
-    hourly_limit = Column(Integer, default=30, nullable=False)
-    daily_limit = Column(Integer, default=100, nullable=False)
+    access_token = Column(Text, nullable=True) # Long-lived Meta Graph API token or session token
+    session_cookie = Column(Text, nullable=True) # Direct web session cookie
+    profile_picture_url = Column(String(500), nullable=True)
+    connection_type = Column(String(20), default="SESSION", nullable=False) # SESSION or META_GRAPH
+    hourly_limit = Column(Integer, default=20, nullable=False)
+    daily_limit = Column(Integer, default=60, nullable=False)
     dms_sent_today = Column(Integer, default=0, nullable=False)
     last_reset_date = Column(String(20), nullable=True) # YYYY-MM-DD
     is_active = Column(Boolean, default=True, nullable=False)
@@ -332,12 +335,14 @@ class InstagramCampaign(BaseModel):
     instagram_account_id = Column(String(36), ForeignKey("instagram_accounts.id"), nullable=False, index=True)
     file_id = Column(String(36), ForeignKey("files.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
+    post_url = Column(String(500), nullable=True) # Link to specific Reel or Post (e.g., https://instagram.com/reel/...)
     trigger_keywords = Column(Text, nullable=False) # Comma-separated (e.g., "ob55,apk,download")
     dm_templates_json = Column(Text, nullable=False) # JSON array of spintax variants
     reply_comments_json = Column(Text, nullable=True) # JSON array of comment reply variants
     send_comment_reply = Column(Boolean, default=True, nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     total_dms_sent = Column(Integer, default=0, nullable=False)
+    last_scanned_at = Column(DateTime, nullable=True)
 
     account = relationship("InstagramAccount", back_populates="campaigns")
     file = relationship("File")

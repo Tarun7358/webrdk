@@ -334,4 +334,26 @@ async def test_instagram_deduplication_and_rate_limits(async_session: AsyncSessi
     finally:
         InstagramAutoDmService.dispatch_meta_dm = original_dispatch
 
+@pytest.mark.asyncio
+async def test_instagram_option_a_shortcode_math():
+    from app.services.instagram.service import InstagramAutoDmService
+
+    # 1. Test shortcode extraction from various Instagram URLs
+    url1 = "https://www.instagram.com/reel/C6O1X1pS6yP/?igsh=MWxnd214"
+    assert InstagramAutoDmService.extract_shortcode_from_url(url1) == "C6O1X1pS6yP"
+
+    url2 = "https://instagram.com/p/DA12345XYZ"
+    assert InstagramAutoDmService.extract_shortcode_from_url(url2) == "DA12345XYZ"
+
+    url3 = "https://www.instagram.com/reels/C6O1X1pS6yP"
+    assert InstagramAutoDmService.extract_shortcode_from_url(url3) == "C6O1X1pS6yP"
+
+    # 2. Test mathematical shortcode to media ID conversion
+    # Instagram encoding uses standard base64 alphabet: A-Z, a-z, 0-9, -, _
+    media_id = InstagramAutoDmService.shortcode_to_media_id("C6O1X1pS6yP")
+    assert media_id is not None
+    assert isinstance(media_id, int)
+    assert media_id > 0
+
+
 

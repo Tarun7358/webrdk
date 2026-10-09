@@ -3,18 +3,33 @@ from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, ConfigDict
 
 class ConnectInstagramRequest(BaseModel):
-    instagram_business_id: str
+    instagram_business_id: Optional[str] = None
     facebook_page_id: Optional[str] = None
     username: str
-    access_token: str
-    hourly_limit: Optional[int] = 30
-    daily_limit: Optional[int] = 100
+    access_token: Optional[str] = None
+    hourly_limit: Optional[int] = 20
+    daily_limit: Optional[int] = 60
+
+class ConnectInstagramSessionRequest(BaseModel):
+    session_id: str
+    username: Optional[str] = None
+    hourly_limit: Optional[int] = 20
+    daily_limit: Optional[int] = 60
+
+class ConnectInstagramLoginRequest(BaseModel):
+    username: str
+    password: str
+    two_factor_code: Optional[str] = None
+    hourly_limit: Optional[int] = 20
+    daily_limit: Optional[int] = 60
 
 class InstagramAccountResponse(BaseModel):
     id: str
     username: str
-    instagram_business_id: str
+    instagram_business_id: Optional[str] = None
     facebook_page_id: Optional[str] = None
+    profile_picture_url: Optional[str] = None
+    connection_type: str = "SESSION"
     is_active: bool
     hourly_limit: int
     daily_limit: int
@@ -26,6 +41,7 @@ class InstagramAccountResponse(BaseModel):
 class InstagramCampaignCreate(BaseModel):
     file_id: str
     title: str
+    post_url: Optional[str] = None # Optional Reel or Post URL
     trigger_keywords: str # e.g. "ob55, apk, download, link"
     dm_templates: List[str] # List of spintax variations
     reply_comments: Optional[List[str]] = None # List of public comment replies
@@ -33,6 +49,7 @@ class InstagramCampaignCreate(BaseModel):
 
 class InstagramCampaignUpdate(BaseModel):
     title: Optional[str] = None
+    post_url: Optional[str] = None
     trigger_keywords: Optional[str] = None
     dm_templates: Optional[List[str]] = None
     reply_comments: Optional[List[str]] = None
@@ -44,6 +61,7 @@ class InstagramCampaignResponse(BaseModel):
     file_id: str
     file_name: Optional[str] = None
     title: str
+    post_url: Optional[str] = None
     trigger_keywords: str
     dm_templates: List[str]
     reply_comments: List[str]

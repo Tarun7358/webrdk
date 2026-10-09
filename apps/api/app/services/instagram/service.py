@@ -297,3 +297,283 @@ class InstagramAutoDmService:
                 return False, res.text
         except Exception as e:
             return False, str(e)
+
+    # ----------------- Option A: Private Web Session Implementation (Zero Meta App) -----------------
+
+    @staticmethod
+    def extract_shortcode_from_url(url: str) -> Optional[str]:
+        """Extracts shortcode from Instagram URL (e.g. reel/C8abcde123/ or p/C8abcde123/)"""
+        if not url:
+            return None
+        match = re.search(r"/(?:p|reels?|tv)/([A-Za-z0-9_-]+)", url)
+        if match:
+            return match.group(1)
+        return None
+
+    @staticmethod
+    def shortcode_to_media_id(shortcode: str) -> Optional[int]:
+        """Converts Instagram base64-like shortcode to numerical media_id"""
+        if not shortcode:
+            return None
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        media_id = 0
+        try:
+            for letter in shortcode:
+                media_id = (media_id * 64) + alphabet.index(letter)
+            return media_id
+        except Exception:
+            return None
+
+    @classmethod
+    async def validate_session_cookie(cls, session_id: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
+        """
+        Validates an Instagram web sessionid cookie against official Instagram Web API.
+        Returns: (is_valid, user_data, error_message)
+        """
+        clean_cookie = session_id.strip()
+        if "sessionid=" in clean_cookie:
+            match = re.search(r"sessionid=([^;]+)", clean_cookie)
+            if match:
+                clean_cookie = match.group(1)
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "X-IG-App-ID": "936619743392459",
+            "Cookie": f"sessionid={clean_cookie};"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get("https://www.instagram.com/api/v1/accounts/current_user/?edit=true", headers=headers)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    user = data.get("user", {})
+                    return True, {
+                        "pk": str(user.get("pk", "")),
+                        "username": user.get("username", ""),
+                        "full_name": user.get("full_name", ""),
+                        "profile_pic_url": user.get("profile_pic_url", ""),
+                        "session_cookie": clean_cookie
+                    }, None
+                else:
+                    return False, None, "Invalid or expired sessionid cookie. Please ensure you are logged into instagram.com and copied the active sessionid."
+        except Exception as e:
+            logger.error(f"Error validating Instagram session: {e}")
+            return False, None, f"Failed to connect to Instagram servers: {str(e)}"
+
+    @classmethod
+    async def send_private_dm(
+        cls,
+        session_cookie: str,
+        recipient_username: str,
+        text_message: str
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Sends a Direct Message using Instagram's authenticated Web Session API (Option A).
+        """
+        clean_cookie = session_cookie.strip()
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "X-IG-App-ID": "936619743392459",
+            "X-CSRFToken": "missing",
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": "https://www.instagram.com/direct/inbox/",
+            "Cookie": f"sessionid={clean_cookie};"
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=20.0) as client:
+                recipient_id = None
+                try:
+                    prof_resp = await client.get(
+                        f"https://www.instagram.com/api/v1/users/web_profile_info/?username={recipient_username}",
+                        headers=headers
+                    )
+                    if prof_resp.status_code == 200:
+                        prof_data = prof_resp.json()
+                        recipient_id = prof_data.get("data", {}).get("user", {}).get("id")
+                except Exception as e:
+                    logger.warning(f"Could not resolve username {recipient_username} via profile: {e}")
+
+                if not recipient_id:
+                    try:
+                        search_resp = await client.get(
+                            f"https://www.instagram.com/api/v1/web/search/topsearch/?context=blended&query={recipient_username}&rank_token=0.5",
+                            headers=headers
+                        )
+                        if search_resp.status_code == 200:
+                            users = search_resp.json().get("users", [])
+                            for u_item in users:
+                                u_obj = u_item.get("user", {})
+                                if u_obj.get("username", "").lower() == recipient_username.lower():
+                                    recipient_id = str(u_obj.get("pk"))
+                                    break
+                    except Exception:
+                        pass
+
+                if not recipient_id:
+                    return False, f"Could not locate Instagram user ID for @{recipient_username}"
+
+                data = {
+                    "recipient_users": json.dumps([[recipient_id]]),
+                    "action": "send_item",
+                    "text": text_message
+                }
+                send_resp = await client.post(
+                    "https://www.instagram.com/api/v1/direct_v2/threads/broadcast/text/",
+                    headers=headers,
+                    data=data
+                )
+
+                if send_resp.status_code in [200, 201]:
+                    return True, None
+                else:
+                    return False, f"Instagram DM dispatch failed ({send_resp.status_code}): {send_resp.text[:150]}"
+        except Exception as e:
+            return False, f"Network error sending DM: {str(e)}"
+
+    @classmethod
+    async def fetch_media_comments(
+        cls,
+        session_cookie: str,
+        media_id: int
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetches latest comments on a specific Reel or Post using Instagram Web API.
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "X-IG-App-ID": "936619743392459",
+            "Cookie": f"sessionid={session_cookie};"
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    f"https://www.instagram.com/api/v1/media/{media_id}/comments/?can_support_threading=true",
+                    headers=headers
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    comments = data.get("comments", [])
+                    output = []
+                    for c in comments:
+                        user = c.get("user", {})
+                        output.append({
+                            "id": str(c.get("pk")),
+                            "text": c.get("text", ""),
+                            "user_id": str(user.get("pk", "")),
+                            "username": user.get("username", ""),
+                            "created_at": c.get("created_at_utc")
+                        })
+                    return output
+        except Exception as e:
+            logger.error(f"Error fetching Instagram comments: {e}")
+        return []
+
+    @classmethod
+    async def scan_and_execute_campaign(
+        cls,
+        campaign_id: str,
+        session: AsyncSession
+    ) -> Dict[str, Any]:
+        """
+        Scans comments on the campaign's Reel/Post, matches keywords, and dispatches DMs.
+        """
+        camp_stmt = select(InstagramCampaign, InstagramAccount, File).join(
+            InstagramAccount, InstagramCampaign.instagram_account_id == InstagramAccount.id
+        ).join(
+            File, InstagramCampaign.file_id == File.id
+        ).where(
+            InstagramCampaign.id == campaign_id,
+            InstagramCampaign.is_active == True,
+            InstagramAccount.is_active == True
+        )
+        res = await session.execute(camp_stmt)
+        row = res.first()
+        if not row:
+            return {"status": "SKIPPED", "processed": 0, "reason": "Campaign or account inactive"}
+
+        campaign, account, file_obj = row
+        session_cookie = account.session_cookie or account.access_token
+
+        if not session_cookie:
+            return {"status": "ERROR", "processed": 0, "reason": "No active session cookie found"}
+
+        shortcode = cls.extract_shortcode_from_url(campaign.post_url or "")
+        media_id = cls.shortcode_to_media_id(shortcode) if shortcode else None
+
+        if not media_id:
+            return {"status": "SKIPPED", "processed": 0, "reason": "Please provide a valid Reel or Post URL"}
+
+        comments = await cls.fetch_media_comments(session_cookie, media_id)
+        if not comments:
+            return {"status": "OK", "processed": 0, "message": "No comments found on Reel"}
+
+        today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        if account.last_reset_date != today_str:
+            account.dms_sent_today = 0
+            account.last_reset_date = today_str
+
+        sent_count = 0
+        download_url = f"https://rdkwebsite.netlify.app/d/{file_obj.short_code or file_obj.id}"
+
+        for comment in comments:
+            comment_text = comment.get("text", "")
+            username = comment.get("username", "")
+            user_id = comment.get("user_id", "")
+            comment_id = comment.get("id", "")
+
+            if username.lower() == account.username.lower():
+                continue
+
+            if cls.is_opt_out(comment_text):
+                continue
+
+            if not cls.matches_keywords(comment_text, campaign.trigger_keywords):
+                continue
+
+            if account.dms_sent_today >= account.daily_limit:
+                break
+
+            twenty_four_hrs_ago = datetime.now(timezone.utc) - timedelta(hours=24)
+            dedup_stmt = select(InstagramDmLog).where(
+                InstagramDmLog.campaign_id == campaign.id,
+                InstagramDmLog.recipient_username == username,
+                InstagramDmLog.created_at >= twenty_four_hrs_ago
+            )
+            dedup_res = await session.execute(dedup_stmt)
+            if dedup_res.scalar_one_or_none():
+                continue
+
+            dm_text = cls.select_spintax_variant(
+                campaign.dm_templates_json,
+                username=username,
+                file_name=file_obj.name,
+                download_link=download_url
+            )
+
+            import asyncio
+            await asyncio.sleep(random.uniform(2.5, 5.0))
+
+            success, err = await cls.send_private_dm(session_cookie, username, dm_text)
+
+            log = InstagramDmLog(
+                campaign_id=campaign.id,
+                recipient_ig_id=user_id or "unknown",
+                recipient_username=username,
+                comment_id=comment_id,
+                comment_text=comment_text,
+                dm_text_sent=dm_text if success else None,
+                status="SENT" if success else "FAILED",
+                error_message=err
+            )
+            session.add(log)
+
+            if success:
+                account.dms_sent_today += 1
+                campaign.total_dms_sent += 1
+                sent_count += 1
+
+        campaign.last_scanned_at = datetime.now(timezone.utc)
+        await session.commit()
+        return {"status": "SUCCESS", "processed": sent_count}

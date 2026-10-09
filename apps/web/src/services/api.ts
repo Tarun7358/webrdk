@@ -151,11 +151,17 @@ export const api = {
     return request<any>(`/integrations/instagram/oauth/login-url${q}`);
   },
   getInstagramAccount: () => request<any>('/integrations/instagram/account'),
+  connectInstagramSession: (data: {
+    session_id: string;
+    username?: string;
+    hourly_limit?: number;
+    daily_limit?: number;
+  }) => request<any>('/integrations/instagram/connect-session', { method: 'POST', body: JSON.stringify(data) }),
   connectInstagramAccount: (data: {
-    instagram_business_id: string;
+    instagram_business_id?: string;
     facebook_page_id?: string;
     username: string;
-    access_token: string;
+    access_token?: string;
     hourly_limit?: number;
     daily_limit?: number;
   }) => request<any>('/integrations/instagram/connect', { method: 'POST', body: JSON.stringify(data) }),
@@ -164,6 +170,7 @@ export const api = {
   createInstagramCampaign: (data: {
     file_id: string;
     title: string;
+    post_url?: string;
     trigger_keywords: string;
     dm_templates: string[];
     reply_comments?: string[];
@@ -171,12 +178,15 @@ export const api = {
   }) => request<any>('/integrations/instagram/campaigns', { method: 'POST', body: JSON.stringify(data) }),
   updateInstagramCampaign: (campaignId: string, data: {
     title?: string;
+    post_url?: string;
     trigger_keywords?: string;
     dm_templates?: string[];
     reply_comments?: string[];
     send_comment_reply?: boolean;
     is_active?: boolean;
   }) => request<any>(`/integrations/instagram/campaigns/${campaignId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  scanInstagramCampaign: (campaignId: string) =>
+    request<any>(`/integrations/instagram/campaigns/${campaignId}/scan`, { method: 'POST' }),
   deleteInstagramCampaign: (campaignId: string) => request<any>(`/integrations/instagram/campaigns/${campaignId}`, { method: 'DELETE' }),
   getInstagramLogs: (campaignId?: string, limit: number = 50) => {
     const q = campaignId ? `?campaign_id=${campaignId}&limit=${limit}` : `?limit=${limit}`;

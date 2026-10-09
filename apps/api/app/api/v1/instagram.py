@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.core.dependencies import get_current_user
 from app.models.schema_models import User, InstagramAccount, InstagramCampaign, InstagramDmLog, File
 from app.schemas.instagram_schemas import (
-    ConnectInstagramRequest, InstagramAccountResponse,
+    ConnectInstagramRequest, ConnectInstagramSessionRequest, InstagramAccountResponse,
     InstagramCampaignCreate, InstagramCampaignUpdate, InstagramCampaignResponse,
     InstagramDmLogResponse
 )
@@ -304,6 +304,58 @@ async def connect_instagram_account(
     await db.refresh(account)
     return account
 
+@router.post("/connect-session", response_model=InstagramAccountResponse)
+async def connect_instagram_session(
+    payload: ConnectInstagramSessionRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Option A: Connects Instagram directly via authenticated web sessionid cookie.
+    Zero Meta Developer App, zero Facebook Page required.
+    """
+    is_valid, user_data, error_msg = await InstagramAutoDmService.validate_session_cookie(payload.session_id)
+    if not is_valid or not user_data:
+        raise HTTPException(status_code=400, detail=error_msg or "Failed to validate Instagram session.")
+
+    username = user_data.get("username")
+    pk = user_data.get("pk")
+    pic_url = user_data.get("profile_pic_url")
+    clean_cookie = user_data.get("session_cookie")
+
+    stmt = select(InstagramAccount).where(InstagramAccount.user_id == current_user.id)
+    res = await db.execute(stmt)
+    account = res.scalar_one_or_none()
+
+    if account:
+        account.username = username
+        account.instagram_business_id = pk
+        account.session_cookie = clean_cookie
+        account.profile_picture_url = pic_url
+        account.connection_type = "SESSION"
+        if payload.hourly_limit:
+            account.hourly_limit = payload.hourly_limit
+        if payload.daily_limit:
+            account.daily_limit = payload.daily_limit
+        account.is_active = True
+    else:
+        account = InstagramAccount(
+            user_id=current_user.id,
+            username=username,
+            instagram_business_id=pk,
+            session_cookie=clean_cookie,
+            profile_picture_url=pic_url,
+            connection_type="SESSION",
+            hourly_limit=payload.hourly_limit or 20,
+            daily_limit=payload.daily_limit or 60,
+            is_active=True
+        )
+        db.add(account)
+
+    await db.commit()
+    await db.refresh(account)
+    return account
+
 @router.post("/disconnect")
 async def disconnect_instagram_account(
     current_user: User = Depends(get_current_user),
@@ -345,6 +397,7 @@ async def list_campaigns(
             file_id=camp.file_id,
             file_name=f_name or "Untitled File",
             title=camp.title,
+            post_url=camp.post_url,
             trigger_keywords=camp.trigger_keywords,
             dm_templates=dm_templates,
             reply_comments=reply_comments,
@@ -380,6 +433,7 @@ async def create_campaign(
         instagram_account_id=account.id,
         file_id=payload.file_id,
         title=payload.title,
+        post_url=payload.post_url,
         trigger_keywords=payload.trigger_keywords,
         dm_templates_json=json.dumps(payload.dm_templates),
         reply_comments_json=json.dumps(payload.reply_comments or ["Sent to your DM! 📩", "Check your message requests! 🚀"]),
@@ -396,6 +450,7 @@ async def create_campaign(
         file_id=campaign.file_id,
         file_name=file_obj.name,
         title=campaign.title,
+        post_url=campaign.post_url,
         trigger_keywords=campaign.trigger_keywords,
         dm_templates=payload.dm_templates,
         reply_comments=payload.reply_comments or [],
@@ -423,6 +478,8 @@ async def update_campaign(
     camp, f_name = row
     if payload.title is not None:
         camp.title = payload.title
+    if payload.post_url is not None:
+        camp.post_url = payload.post_url
     if payload.trigger_keywords is not None:
         camp.trigger_keywords = payload.trigger_keywords
     if payload.dm_templates is not None:
@@ -445,6 +502,7 @@ async def update_campaign(
         file_id=camp.file_id,
         file_name=f_name or "Untitled File",
         title=camp.title,
+        post_url=camp.post_url,
         trigger_keywords=camp.trigger_keywords,
         dm_templates=dm_templates,
         reply_comments=reply_comments,
@@ -453,6 +511,25 @@ async def update_campaign(
         total_dms_sent=camp.total_dms_sent,
         created_at=camp.created_at
     )
+
+@router.post("/campaigns/{campaign_id}/scan")
+async def scan_campaign_comments(
+    campaign_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Immediately scans the campaign's Reel for new trigger comments and auto-dispatches DMs.
+    """
+    # Verify campaign ownership
+    stmt = select(InstagramCampaign).where(InstagramCampaign.id == campaign_id, InstagramCampaign.user_id == current_user.id)
+    res = await db.execute(stmt)
+    camp = res.scalar_one_or_none()
+    if not camp:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    result = await InstagramAutoDmService.scan_and_execute_campaign(campaign_id, db)
+    return result
 
 @router.delete("/campaigns/{campaign_id}")
 async def delete_campaign(
