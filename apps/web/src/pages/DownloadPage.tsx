@@ -25,6 +25,7 @@ export const DownloadPage: React.FC = () => {
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [countdown, setCountdown] = useState<number>(3);
   const [readyToDownload, setReadyToDownload] = useState(false);
+  const [downloadStarted, setDownloadStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [videoSeconds, setVideoSeconds] = useState(0);
@@ -357,18 +358,40 @@ export const DownloadPage: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <a
                       href={downloadUrl}
                       download={data.file_name}
+                      onClick={() => setDownloadStarted(true)}
                       className="inline-flex items-center gap-3 px-10 py-5 bg-rage-accent hover:bg-rage-600 text-white font-black text-base rounded-2xl transition-all shadow-rage-glow hover:scale-105 active:scale-95 uppercase tracking-wider"
                     >
-                      <Download className="w-6 h-6 animate-bounce" />
-                      <span>Download File Now</span>
+                      {downloadStarted ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Downloading File...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Download className="w-6 h-6 animate-bounce" />
+                          <span>Download File Now</span>
+                        </>
+                      )}
                     </a>
-                    <div className="text-xs text-gray-500 font-mono">
-                      Direct Google Drive edge pipe • Uncapped speed • Instant handshake
-                    </div>
+                    {downloadStarted ? (
+                      <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 max-w-sm mx-auto space-y-1">
+                        <div className="font-bold flex items-center justify-center gap-1.5">
+                          <Check className="w-4 h-4 text-emerald-400" />
+                          <span>Download thread initiated!</span>
+                        </div>
+                        <div className="text-[11px] text-gray-300">
+                          On iPhone / Safari: Check the download icon <strong>(⬇️)</strong> in your browser address bar to view file progress.
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 font-mono">
+                        Direct Google Drive edge pipe • Uncapped speed • Instant handshake
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

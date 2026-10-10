@@ -152,12 +152,16 @@ async def trigger_download(
         storage_svc = get_storage_service()
         target_key = file.google_drive_file_id or file.storage_key or file.id
 
+    from urllib.parse import quote
+    safe_filename = quote(file.name)
     try:
         return StreamingResponse(
             storage_svc.download_stream(target_key),
-            media_type=file.mime_type,
+            media_type=file.mime_type or "application/octet-stream",
             headers={
-                "Content-Disposition": f'attachment; filename="{file.name}"',
+                "Content-Disposition": f'attachment; filename="{file.name}"; filename*=UTF-8\'\'{safe_filename}',
+                "Content-Length": str(file.size),
+                "Accept-Ranges": "bytes",
                 "X-RAGE-Traffic-Status": "QUALIFIED" if fraud_eval["is_qualified"] else "UNQUALIFIED"
             }
         )
