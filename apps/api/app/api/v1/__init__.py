@@ -15,22 +15,31 @@ from app.api.v1.admin import router as admin_router
 from app.api.v1.owner import router as owner_router
 from app.api.v1.instagram import router as instagram_router
 
-api_v1_router = APIRouter(prefix="/api/v1")
+all_sub_routers = [
+    auth_router,
+    files_router,
+    shares_router,
+    downloads_router,
+    videos_router,
+    creators_router,
+    wallet_router,
+    teams_router,
+    referrals_router,
+    products_router,
+    subscriptions_router,
+    ads_router,
+    admin_router,
+    owner_router,
+    instagram_router,
+]
 
-api_v1_router.include_router(auth_router)
-api_v1_router.include_router(files_router)
-api_v1_router.include_router(shares_router)
-api_v1_router.include_router(downloads_router)
-api_v1_router.include_router(videos_router)
-api_v1_router.include_router(creators_router)
-api_v1_router.include_router(wallet_router)
-api_v1_router.include_router(teams_router)
-api_v1_router.include_router(referrals_router)
-api_v1_router.include_router(products_router)
-api_v1_router.include_router(subscriptions_router)
-api_v1_router.include_router(ads_router)
-api_v1_router.include_router(admin_router)
-api_v1_router.include_router(owner_router)
-api_v1_router.include_router(instagram_router)
+api_v1_router = APIRouter(prefix="/api/v1")
+for r in all_sub_routers:
+    api_v1_router.include_router(r)
+
+api_root_router = APIRouter()
+for r in all_sub_routers:
+    api_root_router.include_router(r)
+
 
 

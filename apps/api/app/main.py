@@ -17,7 +17,7 @@ from app.services.ad.service import AdService
 from app.services.referral.service import ReferralService
 from app.services.storage.factory import get_storage_service
 from app.workers.tasks import background_worker_loop
-from app.api.v1 import api_v1_router
+from app.api.v1 import api_v1_router, api_root_router
 
 # Setup structured logging
 logging.basicConfig(
@@ -288,6 +288,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # Mount APIs
 app.include_router(api_v1_router)
+app.include_router(api_root_router)
 
 @app.get("/", tags=["Root"])
 async def root():
