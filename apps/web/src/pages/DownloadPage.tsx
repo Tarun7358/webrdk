@@ -363,12 +363,16 @@ export const DownloadPage: React.FC = () => {
                       href={downloadUrl}
                       download={data.file_name}
                       onClick={() => setDownloadStarted(true)}
-                      className="inline-flex items-center gap-3 px-10 py-5 bg-rage-accent hover:bg-rage-600 text-white font-black text-base rounded-2xl transition-all shadow-rage-glow hover:scale-105 active:scale-95 uppercase tracking-wider"
+                      className={`inline-flex items-center gap-3 px-10 py-5 text-white font-black text-base rounded-2xl transition-all hover:scale-105 active:scale-95 uppercase tracking-wider ${
+                        downloadStarted
+                          ? 'bg-emerald-600 hover:bg-emerald-500 shadow-lg shadow-emerald-600/25'
+                          : 'bg-rage-accent hover:bg-rage-600 shadow-rage-glow'
+                      }`}
                     >
                       {downloadStarted ? (
                         <>
-                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Downloading File...</span>
+                          <Check className="w-6 h-6" />
+                          <span>Your Download Has Been Started</span>
                         </>
                       ) : (
                         <>
@@ -378,7 +382,11 @@ export const DownloadPage: React.FC = () => {
                       )}
                     </a>
                     <div className="text-xs text-gray-500 font-mono">
-                      Direct Google Drive edge pipe • Uncapped speed • Instant handshake
+                      {downloadStarted ? (
+                        <span>Check your browser downloads tray • Click button again if you need to re-download</span>
+                      ) : (
+                        <span>Direct Google Drive edge pipe • Uncapped speed • Instant handshake</span>
+                      )}
                     </div>
                   </div>
                 )}
