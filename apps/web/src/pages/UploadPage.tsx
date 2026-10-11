@@ -250,7 +250,7 @@ export const UploadPage: React.FC = () => {
           <div className="space-y-2">
             <h2 className="text-2xl font-black text-white font-display">Transmission Complete!</h2>
             <p className="text-xs sm:text-sm text-gray-400 max-w-lg mx-auto">
-              Your file <strong className="text-white font-mono">{uploadSuccess.name}</strong> ({(uploadSuccess.size / (1024 * 1024)).toFixed(2)} MB) is verified and deployed to global edge delivery.
+              Your file <strong className="text-white font-mono">{uploadSuccess.name}</strong> ({uploadSuccess.size >= 1024 * 1024 * 1024 ? (uploadSuccess.size / (1024 * 1024 * 1024)).toFixed(2) + ' GB' : (uploadSuccess.size / (1024 * 1024)).toFixed(2) + ' MB'}) is verified and deployed to global edge delivery.
             </p>
           </div>
 
@@ -589,6 +589,11 @@ export const UploadPage: React.FC = () => {
               <div className="font-mono flex items-center gap-2">
                 <span className="text-white font-semibold">
                   {formatMB(loadedBytes)} MB / {formatMB(totalBytes || selectedFile?.size || 0)} MB
+                  {(totalBytes || selectedFile?.size || 0) >= 1024 * 1024 * 1024 && (
+                    <span className="text-slate-400 font-sans text-[11px] ml-1.5 font-normal">
+                      ({(loadedBytes / (1024 * 1024 * 1024)).toFixed(2)} / {((totalBytes || selectedFile?.size || 0) / (1024 * 1024 * 1024)).toFixed(2)} GB)
+                    </span>
+                  )}
                 </span>
                 {uploadSpeed && isUploading && !isVerifying && (
                   <span className="text-slate-400 font-sans text-[11px]">({uploadSpeed})</span>

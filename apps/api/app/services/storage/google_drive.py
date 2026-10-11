@@ -222,12 +222,32 @@ class GoogleDriveStorage(StorageService):
         if metadata:
             file_metadata['properties'] = {k: str(v) for k, v in metadata.items()}
 
-        media = MediaIoBaseUpload(file_obj, mimetype=mime_type, resumable=True)
-        file = self.service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields='id, name, size, webViewLink, webContentLink'
-        ).execute()
+        media = MediaIoBaseUpload(file_obj, mimetype=mime_type, resumable=True, chunksize=10 * 1024 * 1024)
+        def _execute_upload():
+            req = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, name, size, webViewLink, webContentLink'
+            )
+            resp = None
+            retry_count = 0
+            while resp is None:
+                try:
+                    status, resp = req.next_chunk()
+                    retry_count = 0
+                    if status:
+                        progress_pct = int(status.progress() * 100)
+                        logger.info(f"Google Drive sync progress for '{filename}': {progress_pct}%")
+                except Exception as chunk_err:
+                    retry_count += 1
+                    if retry_count > 5:
+                        raise chunk_err
+                    logger.warning(f"Google Drive upload chunk retry {retry_count}/5 for '{filename}': {chunk_err}")
+                    import time
+                    time.sleep(2 * retry_count)
+            return resp
+
+        file = await asyncio.to_thread(_execute_upload)
 
         file_id = file.get('id')
         size = int(file.get('size', 0))

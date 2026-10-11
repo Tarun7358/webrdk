@@ -3,15 +3,17 @@ import io
 import hashlib
 import logging
 import tempfile
+import shutil
+import uuid
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("rage.api.files")
 from typing import List, Optional, Any, Dict
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File as FastApiFile, Form, Request
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File as FastApiFile, Form, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse, FileResponse as StarletteFileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, func
-from app.core.database import get_db
+from app.core.database import get_db, AsyncSessionLocal
 from app.core.config import settings
 from app.core.security import get_password_hash
 from app.core.dependencies import get_current_user, rate_limit_dependency
@@ -208,9 +210,81 @@ async def upload_file(
 
     return serialize_file_response(new_file, default_share)
  
+async def sync_file_to_google_drive(
+    file_id: str,
+    staging_path: str,
+    filename: str,
+    mime_type: str,
+    folder_category: str,
+    owner_id: str
+):
+    logger.info(f"Background cloud sync started for file {file_id} ('{filename}')...")
+    try:
+        # 1. Compute SHA-256 Checksum by streaming from disk (zero RAM spike)
+        sha256 = hashlib.sha256()
+        with open(staging_path, "rb") as f:
+            while True:
+                block = f.read(1024 * 1024 * 4) # 4MB blocks
+                if not block:
+                    break
+                sha256.update(block)
+        checksum = sha256.hexdigest()
+
+        # 2. Upload to storage service (Google Drive)
+        storage_svc = get_storage_service()
+        with open(staging_path, "rb") as f:
+            upload_result = await storage_svc.upload(
+                file_obj=f,
+                filename=filename,
+                mime_type=mime_type,
+                folder_category=folder_category,
+                metadata={"owner_id": owner_id, "checksum": checksum}
+            )
+
+        # 3. Update database record in a fresh session
+        async with AsyncSessionLocal() as session:
+            stmt = select(File).where(File.id == file_id)
+            res = await session.execute(stmt)
+            file_record = res.scalar_one_or_none()
+            if file_record:
+                file_record.google_drive_file_id = upload_result.get("file_id")
+                file_record.storage_key = upload_result.get("storage_key")
+                file_record.storage_backend = upload_result.get("storage_backend", "google_drive")
+                file_record.checksum = checksum
+                file_record.status = "ACTIVE"
+                await session.commit()
+                logger.info(f"File {file_id} successfully synced to Google Drive and marked ACTIVE.")
+
+        # 4. Clean up staging file if remote Google Drive upload succeeded
+        if upload_result.get("storage_backend") == "google_drive":
+            try:
+                if os.path.exists(staging_path):
+                    os.remove(staging_path)
+            except Exception as e:
+                logger.warning(f"Could not remove staging file {staging_path}: {e}")
+    except Exception as e:
+        logger.error(f"Error syncing file {file_id} to Google Drive: {e}", exc_info=True)
+        try:
+            async with AsyncSessionLocal() as session:
+                stmt = select(File).where(File.id == file_id)
+                res = await session.execute(stmt)
+                file_record = res.scalar_one_or_none()
+                if file_record:
+                    # If local staging file exists, fallback to local storage so user can still download it!
+                    if os.path.exists(staging_path):
+                        file_record.storage_key = f"staging://{os.path.basename(staging_path)}"
+                        file_record.storage_backend = "local"
+                        file_record.status = "ACTIVE"
+                    else:
+                        file_record.status = "ERROR"
+                    await session.commit()
+        except Exception as db_err:
+            logger.error(f"Failed to update fallback status for file {file_id}: {db_err}")
+
 @router.post("/upload/chunk")
 async def upload_file_chunk(
     request: Request,
+    background_tasks: BackgroundTasks,
     chunk: UploadFile = FastApiFile(...),
     upload_id: str = Form(...),
     chunk_index: int = Form(...),
@@ -270,7 +344,7 @@ async def upload_file_chunk(
             detail=f"Failed to write chunk {chunk_index} to storage."
         )
 
-    # If not the last chunk, acknowledge receipt
+    # If not the last chunk, acknowledge receipt immediately
     if chunk_index < total_chunks - 1:
         current_bytes = os.path.getsize(part_path) if os.path.exists(part_path) else 0
         return {
@@ -281,18 +355,19 @@ async def upload_file_chunk(
             "received_bytes": current_bytes
         }
 
-    # Last chunk arrived! Finalize and upload to Google Drive
-    actual_size = os.path.getsize(part_path)
+    # Last chunk arrived! Move completed file to staging folder
+    staging_dir = os.path.join(settings.LOCAL_STORAGE_DIR, "staging")
+    os.makedirs(staging_dir, exist_ok=True)
+    file_id = str(uuid.uuid4())
+    safe_name = "".join([c for c in filename if c.isalnum() or c in "._- "]) or "upload.bin"
+    staging_filename = f"{file_id}_{safe_name}"
+    staging_path = os.path.join(staging_dir, staging_filename)
 
-    # Compute SHA-256 Checksum by streaming from disk
-    sha256 = hashlib.sha256()
-    with open(part_path, "rb") as f:
-        while True:
-            block = f.read(1024 * 1024 * 4) # 4MB blocks
-            if not block:
-                break
-            sha256.update(block)
-    checksum = sha256.hexdigest()
+    shutil.move(part_path, staging_path)
+    actual_size = os.path.getsize(staging_path)
+
+    parts = filename.rsplit(".", 1)
+    extension = parts[-1].lower() if len(parts) > 1 else ""
 
     folder_category = "public"
     if visibility.upper() == "PRIVATE":
@@ -301,40 +376,23 @@ async def upload_file_chunk(
         folder_category = "paid"
 
     storage_svc = get_storage_service()
-    try:
-        with open(part_path, "rb") as f:
-            upload_result = await storage_svc.upload(
-                file_obj=f,
-                filename=filename,
-                mime_type=chunk.content_type or "application/octet-stream",
-                folder_category=folder_category,
-                metadata={"owner_id": current_user.id, "checksum": checksum}
-            )
-    finally:
-        # Clean up temporary assembled file
-        if os.path.exists(part_path):
-            try:
-                os.remove(part_path)
-            except Exception as e:
-                logger.warning(f"Could not remove temp part file {part_path}: {e}")
-
-    parts = filename.rsplit(".", 1)
-    extension = parts[-1].lower() if len(parts) > 1 else ""
+    is_gdrive = hasattr(storage_svc, "service") and storage_svc.is_configured()
 
     new_file = File(
+        id=file_id,
         owner_id=current_user.id,
         team_id=team_id,
-        google_drive_file_id=upload_result.get("file_id") if upload_result.get("storage_backend") == "google_drive" else None,
-        storage_key=upload_result.get("storage_key"),
-        storage_backend=upload_result.get("storage_backend", "google_drive"),
+        google_drive_file_id=None,
+        storage_key=f"staging://{staging_filename}",
+        storage_backend="google_drive" if is_gdrive else "local",
         name=filename,
         original_name=filename,
         mime_type=chunk.content_type or "application/octet-stream",
         extension=extension,
         size=actual_size,
-        checksum=checksum,
+        checksum="verifying",
         visibility=visibility.upper(),
-        status="ACTIVE",
+        status="SYNCING" if is_gdrive else "ACTIVE",
         price=price if visibility.upper() == "PAID" else 0.0,
         download_count=0,
         view_count=0
@@ -378,6 +436,18 @@ async def upload_file_chunk(
     await db.commit()
     await db.refresh(new_file)
     await db.refresh(default_share)
+
+    # Queue Google Drive upload in background task so HTTP response returns in < 100ms
+    if is_gdrive:
+        background_tasks.add_task(
+            sync_file_to_google_drive,
+            new_file.id,
+            staging_path,
+            filename,
+            chunk.content_type or "application/octet-stream",
+            folder_category,
+            current_user.id
+        )
 
     return serialize_file_response(new_file, default_share)
 

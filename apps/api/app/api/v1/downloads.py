@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse, FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.dependencies import rate_limit_dependency
 from app.models.schema_models import File, ShareLink, Download, User
 from app.services.storage.factory import get_storage_service
@@ -88,7 +89,10 @@ async def trigger_download(
         from app.services.storage.local_storage import LocalStorage
         local_svc = LocalStorage()
         target_key = file.storage_key or file.id
-        local_path = local_svc._resolve_path(target_key)
+        if target_key and target_key.startswith("staging://"):
+            local_path = os.path.join(settings.LOCAL_STORAGE_DIR, "staging", target_key.replace("staging://", ""))
+        else:
+            local_path = local_svc._resolve_path(target_key)
         if not local_path or not os.path.exists(local_path):
             raise HTTPException(
                 status_code=404,

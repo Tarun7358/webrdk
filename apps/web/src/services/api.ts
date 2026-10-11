@@ -229,9 +229,9 @@ export const api = {
     const onProgress = typeof signalOrProgress === 'function' ? signalOrProgress : (typeof optionsOrProgress === 'function' ? optionsOrProgress : undefined);
     const signal = maybeSignal || (signalOrProgress instanceof AbortSignal ? signalOrProgress : undefined);
 
-    const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB chunks (well below Cloudflare's 100MB limit)
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB chunks (ultra-safe against Cloudflare 100s timeout)
 
-    // Small files (<= 20MB): send in 1 request
+    // Small files (<= 10MB): send in 1 request
     if (file.size <= CHUNK_SIZE) {
       const formData = new FormData();
       formData.append('file', file);
@@ -242,7 +242,7 @@ export const api = {
       return api.uploadSingleFile(formData, onProgress, signal);
     }
 
-    // Large files (> 20MB, up to 50GB): chunked streaming
+    // Large files (> 10MB, up to 50GB): chunked streaming
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     const uploadId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     let finalResponse: any = null;
@@ -267,19 +267,37 @@ export const api = {
       chunkFormData.append('price', String(options.price || 0.0));
       if (options.team_id) chunkFormData.append('team_id', options.team_id);
 
-      const res = await api.uploadChunk(
-        chunkFormData,
-        (chunkLoaded) => {
-          const totalTransferred = start + Math.min(chunkLoaded, chunkBlob.size);
-          if (onProgress) {
-            onProgress(totalTransferred, file.size);
-          }
-        },
-        signal
-      );
+      let lastErr: any = null;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const res = await api.uploadChunk(
+            chunkFormData,
+            (chunkLoaded) => {
+              const totalTransferred = start + Math.min(chunkLoaded, chunkBlob.size);
+              if (onProgress) {
+                onProgress(totalTransferred, file.size);
+              }
+            },
+            signal
+          );
 
-      if (chunkIndex === totalChunks - 1) {
-        finalResponse = res;
+          if (chunkIndex === totalChunks - 1) {
+            finalResponse = res;
+          }
+          lastErr = null;
+          break;
+        } catch (err: any) {
+          lastErr = err;
+          if (signal?.aborted) {
+            throw err;
+          }
+          console.warn(`Chunk ${chunkIndex + 1}/${totalChunks} attempt ${attempt + 1} failed: ${err.message}. Retrying...`);
+          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        }
+      }
+
+      if (lastErr) {
+        throw lastErr;
       }
     }
 
