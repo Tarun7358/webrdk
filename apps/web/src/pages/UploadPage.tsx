@@ -59,7 +59,16 @@ export const UploadPage: React.FC = () => {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
+      const file = e.target.files[0];
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > 1024) {
+        setError(
+          `File "${file.name}" (${sizeMB.toFixed(2)} MB) exceeds the maximum limit of 1.0 GB (1,024 MB). Please select a file under 1 GB.`
+        );
+        setSelectedFile(null);
+        return;
+      }
+      setSelectedFile(file);
       setError(null);
     }
   };
@@ -67,7 +76,16 @@ export const UploadPage: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
+      const file = e.dataTransfer.files[0];
+      const sizeMB = file.size / (1024 * 1024);
+      if (sizeMB > 1024) {
+        setError(
+          `File "${file.name}" (${sizeMB.toFixed(2)} MB) exceeds the maximum limit of 1.0 GB (1,024 MB). Please select a file under 1 GB.`
+        );
+        setSelectedFile(null);
+        return;
+      }
+      setSelectedFile(file);
       setError(null);
     }
   };
@@ -89,6 +107,13 @@ export const UploadPage: React.FC = () => {
     e.preventDefault();
     if (!selectedFile) {
       setError('Please select a file to dispatch');
+      return;
+    }
+
+    if (selectedFile.size > 1024 * 1024 * 1024) {
+      setError(
+        `File size (${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 1.0 GB.`
+      );
       return;
     }
 

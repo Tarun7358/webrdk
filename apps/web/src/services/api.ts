@@ -103,10 +103,18 @@ export const api = {
 
       xhr.onload = () => {
         const contentType = xhr.getResponseHeader('content-type') || '';
+        if (xhr.status === 413) {
+          return reject(
+            new Error(
+              'Upload rejected: File size exceeds the network gateway limit (HTTP 413 Request Entity Too Large). If routed through Cloudflare, standard proxy limit is 100 MB.'
+            )
+          );
+        }
+
         if (contentType.includes('text/html')) {
           return reject(
             new Error(
-              `Backend URL misconfigured: Received HTML instead of JSON from ${API_BASE}/files/upload. Please check backend routing.`
+              `Backend URL misconfigured: Received HTML instead of JSON from ${API_BASE}/files/upload. HTTP Status: ${xhr.status}`
             )
           );
         }
@@ -127,7 +135,11 @@ export const api = {
       };
 
       xhr.onerror = () => {
-        reject(new Error(`Unable to reach backend API at ${API_BASE}. Make sure your backend server is running.`));
+        reject(
+          new Error(
+            `Connection closed by network gateway during upload. If you are uploading a large file (>100MB), Cloudflare Tunnel / proxy drops connections exceeding its body size limit.`
+          )
+        );
       };
 
       xhr.onabort = () => {
