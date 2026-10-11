@@ -61,9 +61,9 @@ export const UploadPage: React.FC = () => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       const sizeMB = file.size / (1024 * 1024);
-      if (sizeMB > 1024) {
+      if (sizeMB > 50 * 1024) {
         setError(
-          `File "${file.name}" (${sizeMB.toFixed(2)} MB) exceeds the maximum limit of 1.0 GB (1,024 MB). Please select a file under 1 GB.`
+          `File "${file.name}" (${(sizeMB / 1024).toFixed(2)} GB) exceeds the vault limit of 50 GB. Please select a file under 50 GB.`
         );
         setSelectedFile(null);
         return;
@@ -78,9 +78,9 @@ export const UploadPage: React.FC = () => {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0];
       const sizeMB = file.size / (1024 * 1024);
-      if (sizeMB > 1024) {
+      if (sizeMB > 50 * 1024) {
         setError(
-          `File "${file.name}" (${sizeMB.toFixed(2)} MB) exceeds the maximum limit of 1.0 GB (1,024 MB). Please select a file under 1 GB.`
+          `File "${file.name}" (${(sizeMB / 1024).toFixed(2)} GB) exceeds the vault limit of 50 GB. Please select a file under 50 GB.`
         );
         setSelectedFile(null);
         return;
@@ -110,9 +110,9 @@ export const UploadPage: React.FC = () => {
       return;
     }
 
-    if (selectedFile.size > 1024 * 1024 * 1024) {
+    if (selectedFile.size > 50 * 1024 * 1024 * 1024) {
       setError(
-        `File size (${(selectedFile.size / (1024 * 1024)).toFixed(2)} MB) exceeds the maximum allowed limit of 1.0 GB.`
+        `File size (${(selectedFile.size / (1024 * 1024 * 1024)).toFixed(2)} GB) exceeds the maximum allowed limit of 50 GB.`
       );
       return;
     }
@@ -131,15 +131,11 @@ export const UploadPage: React.FC = () => {
     setIsModalMinimized(false);
     startTimeRef.current = performance.now();
 
-    const formData = new FormData();
-    formData.append('file', selectedFile);
-    formData.append('visibility', visibility);
-    formData.append('price', visibility === 'PAID' ? String(price) : '0.0');
-
     try {
       const res = await api.uploadFile(
-        formData,
-        (loaded, total) => {
+        selectedFile,
+        { visibility, price: visibility === 'PAID' ? price : 0.0 },
+        (loaded: number, total: number) => {
           setLoadedBytes(loaded);
           setTotalBytes(total);
           const percent = total > 0 ? Math.min(Math.round((loaded / total) * 100), 100) : 0;
@@ -371,7 +367,7 @@ export const UploadPage: React.FC = () => {
                   <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5">Videos</span>
                   <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5">ZIP / RAR</span>
                   <span className="px-2 py-0.5 rounded-md bg-white/5 border border-white/5">Software</span>
-                  <span className="text-gray-500">• Max 1.0 GB per upload</span>
+                  <span className="text-emerald-400/90 font-medium">• Cloudflare Chunk Streaming (Up to 50 GB)</span>
                 </div>
               </div>
             )}

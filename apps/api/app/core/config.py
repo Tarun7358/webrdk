@@ -58,7 +58,7 @@ class Settings(BaseSettings):
     JWT_REFRESH_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days
 
     # File limits
-    MAX_UPLOAD_SIZE: int = 1024 * 1024 * 1024 # 1GB
+    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024 * 1024 # 50GB (Supported via chunked streaming)
     ALLOWED_EXTENSIONS: List[str] = [
         "jpg", "jpeg", "png", "gif", "webp", "svg",
         "mp4", "webm", "mov", "mkv", "avi", "mp3", "wav",

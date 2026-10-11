@@ -69,7 +69,8 @@ export const api = {
   getMe: () => request<any>('/auth/me'),
 
   // Files
-  uploadFile: (
+  // Upload a single part (used for small files <= 20MB)
+  uploadSingleFile: (
     formData: FormData,
     onProgress?: (loadedBytes: number, totalBytes: number) => void,
     signal?: AbortSignal
@@ -106,7 +107,7 @@ export const api = {
         if (xhr.status === 413) {
           return reject(
             new Error(
-              'Upload rejected: File size exceeds the network gateway limit (HTTP 413 Request Entity Too Large). If routed through Cloudflare, standard proxy limit is 100 MB.'
+              'Upload rejected: File size exceeds the network gateway limit (HTTP 413 Request Entity Too Large).'
             )
           );
         }
@@ -137,7 +138,7 @@ export const api = {
       xhr.onerror = () => {
         reject(
           new Error(
-            `Connection closed by network gateway during upload. If you are uploading a large file (>100MB), Cloudflare Tunnel / proxy drops connections exceeding its body size limit.`
+            `Connection closed by network gateway during upload to ${API_BASE}.`
           )
         );
       };
@@ -148,6 +149,141 @@ export const api = {
 
       xhr.send(formData);
     });
+  },
+
+  // Upload an individual 20MB chunk (safe under Cloudflare 100MB limit)
+  uploadChunk: (
+    formData: FormData,
+    onProgress?: (loadedBytes: number, totalBytes: number) => void,
+    signal?: AbortSignal
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/files/upload/chunk`);
+
+      const token = localStorage.getItem('rage_token');
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      if (signal) {
+        if (signal.aborted) {
+          return reject(new DOMException('Upload cancelled by user', 'AbortError'));
+        }
+        signal.addEventListener('abort', () => {
+          xhr.abort();
+          reject(new DOMException('Upload cancelled by user', 'AbortError'));
+        });
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        let resJson: any = null;
+        try {
+          resJson = JSON.parse(xhr.responseText);
+        } catch {
+          // ignore parse error
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(resJson);
+        } else {
+          const errorDetail = resJson?.detail || xhr.statusText || 'Chunk upload failed';
+          reject(new Error(errorDetail));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error(`Network error while transmitting chunk to ${API_BASE}.`));
+      };
+
+      xhr.onabort = () => {
+        reject(new DOMException('Upload cancelled by user', 'AbortError'));
+      };
+
+      xhr.send(formData);
+    });
+  },
+
+  // Smart upload: automatically chunks files larger than 20MB to stay 100% under Cloudflare limits
+  uploadFile: async (
+    fileOrFormData: any,
+    optionsOrProgress?: any,
+    signalOrProgress?: any,
+    maybeSignal?: AbortSignal
+  ): Promise<any> => {
+    // If raw FormData was passed:
+    if (fileOrFormData instanceof FormData) {
+      return api.uploadSingleFile(fileOrFormData, optionsOrProgress, signalOrProgress);
+    }
+
+    const file: File = fileOrFormData;
+    const options = typeof optionsOrProgress === 'object' && optionsOrProgress !== null ? optionsOrProgress : {};
+    const onProgress = typeof signalOrProgress === 'function' ? signalOrProgress : (typeof optionsOrProgress === 'function' ? optionsOrProgress : undefined);
+    const signal = maybeSignal || (signalOrProgress instanceof AbortSignal ? signalOrProgress : undefined);
+
+    const CHUNK_SIZE = 20 * 1024 * 1024; // 20 MB chunks (well below Cloudflare's 100MB limit)
+
+    // Small files (<= 20MB): send in 1 request
+    if (file.size <= CHUNK_SIZE) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('visibility', options.visibility || 'PUBLIC');
+      formData.append('price', String(options.price || 0.0));
+      if (options.team_id) formData.append('team_id', options.team_id);
+
+      return api.uploadSingleFile(formData, onProgress, signal);
+    }
+
+    // Large files (> 20MB, up to 50GB): chunked streaming
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    const uploadId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    let finalResponse: any = null;
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+      if (signal?.aborted) {
+        throw new DOMException('Upload cancelled by user', 'AbortError');
+      }
+
+      const start = chunkIndex * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunkBlob = file.slice(start, end);
+
+      const chunkFormData = new FormData();
+      chunkFormData.append('chunk', chunkBlob, file.name);
+      chunkFormData.append('upload_id', uploadId);
+      chunkFormData.append('chunk_index', String(chunkIndex));
+      chunkFormData.append('total_chunks', String(totalChunks));
+      chunkFormData.append('filename', file.name);
+      chunkFormData.append('total_size', String(file.size));
+      chunkFormData.append('visibility', options.visibility || 'PUBLIC');
+      chunkFormData.append('price', String(options.price || 0.0));
+      if (options.team_id) chunkFormData.append('team_id', options.team_id);
+
+      const res = await api.uploadChunk(
+        chunkFormData,
+        (chunkLoaded) => {
+          const totalTransferred = start + Math.min(chunkLoaded, chunkBlob.size);
+          if (onProgress) {
+            onProgress(totalTransferred, file.size);
+          }
+        },
+        signal
+      );
+
+      if (chunkIndex === totalChunks - 1) {
+        finalResponse = res;
+      }
+    }
+
+    return finalResponse;
   },
   getMyFiles: (search?: string, visibility?: string) => {
     const params = new URLSearchParams();

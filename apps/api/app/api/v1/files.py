@@ -2,10 +2,11 @@ import os
 import io
 import hashlib
 import logging
+import tempfile
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("rage.api.files")
-from typing import List, Optional
+from typing import List, Optional, Any, Dict
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File as FastApiFile, Form, Request
 from fastapi.responses import StreamingResponse, FileResponse as StarletteFileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -199,6 +200,179 @@ async def upload_file(
         target_id=new_file.id,
         ip_address=client_ip,
         details=f"Uploaded '{new_file.name}' ({file_size} bytes)"
+    )
+
+    await db.commit()
+    await db.refresh(new_file)
+    await db.refresh(default_share)
+
+    return serialize_file_response(new_file, default_share)
+ 
+@router.post("/upload/chunk")
+async def upload_file_chunk(
+    request: Request,
+    chunk: UploadFile = FastApiFile(...),
+    upload_id: str = Form(...),
+    chunk_index: int = Form(...),
+    total_chunks: int = Form(...),
+    filename: str = Form(...),
+    total_size: int = Form(...),
+    visibility: str = Form("PUBLIC"),
+    price: float = Form(0.0),
+    team_id: Optional[str] = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    temp_dir = os.path.join(tempfile.gettempdir(), "rage_chunks")
+    os.makedirs(temp_dir, exist_ok=True)
+    safe_upload_id = "".join([c for c in upload_id if c.isalnum() or c in "-_"])
+    part_path = os.path.join(temp_dir, f"{safe_upload_id}.part")
+
+    # If first chunk, validate file extension and quota
+    if chunk_index == 0:
+        parts = filename.rsplit(".", 1)
+        extension = parts[-1].lower() if len(parts) > 1 else ""
+        if extension not in settings.ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File extension '.{extension}' is not permitted on RAGE Cloud."
+            )
+
+        storage_limit = getattr(current_user, "storage_limit_bytes", 10 * 1024 * 1024 * 1024) or (10 * 1024 * 1024 * 1024)
+        stmt_usage = select(func.sum(File.size)).where(File.owner_id == current_user.id, File.is_deleted == False)
+        res_usage = await db.execute(stmt_usage)
+        current_used = res_usage.scalar() or 0
+        if current_used + total_size > storage_limit:
+            storage_limit_gb = round(storage_limit / (1024 * 1024 * 1024), 1)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Storage quota exceeded! Your current vault limit is {storage_limit_gb} GB. Please upgrade your plan to upload more files."
+            )
+
+        if os.path.exists(part_path):
+            try:
+                os.remove(part_path)
+            except Exception:
+                pass
+
+    # Append chunk data to part file on disk (low memory usage)
+    try:
+        with open(part_path, "ab") as f:
+            while True:
+                data = await chunk.read(1024 * 1024)
+                if not data:
+                    break
+                f.write(data)
+    except Exception as e:
+        logger.error(f"Error writing chunk {chunk_index} for {upload_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to write chunk {chunk_index} to storage."
+        )
+
+    # If not the last chunk, acknowledge receipt
+    if chunk_index < total_chunks - 1:
+        current_bytes = os.path.getsize(part_path) if os.path.exists(part_path) else 0
+        return {
+            "status": "in_progress",
+            "upload_id": upload_id,
+            "chunk_index": chunk_index,
+            "total_chunks": total_chunks,
+            "received_bytes": current_bytes
+        }
+
+    # Last chunk arrived! Finalize and upload to Google Drive
+    actual_size = os.path.getsize(part_path)
+
+    # Compute SHA-256 Checksum by streaming from disk
+    sha256 = hashlib.sha256()
+    with open(part_path, "rb") as f:
+        while True:
+            block = f.read(1024 * 1024 * 4) # 4MB blocks
+            if not block:
+                break
+            sha256.update(block)
+    checksum = sha256.hexdigest()
+
+    folder_category = "public"
+    if visibility.upper() == "PRIVATE":
+        folder_category = "private"
+    elif visibility.upper() == "PAID":
+        folder_category = "paid"
+
+    storage_svc = get_storage_service()
+    try:
+        with open(part_path, "rb") as f:
+            upload_result = await storage_svc.upload(
+                file_obj=f,
+                filename=filename,
+                mime_type=chunk.content_type or "application/octet-stream",
+                folder_category=folder_category,
+                metadata={"owner_id": current_user.id, "checksum": checksum}
+            )
+    finally:
+        # Clean up temporary assembled file
+        if os.path.exists(part_path):
+            try:
+                os.remove(part_path)
+            except Exception as e:
+                logger.warning(f"Could not remove temp part file {part_path}: {e}")
+
+    parts = filename.rsplit(".", 1)
+    extension = parts[-1].lower() if len(parts) > 1 else ""
+
+    new_file = File(
+        owner_id=current_user.id,
+        team_id=team_id,
+        google_drive_file_id=upload_result.get("file_id") if upload_result.get("storage_backend") == "google_drive" else None,
+        storage_key=upload_result.get("storage_key"),
+        storage_backend=upload_result.get("storage_backend", "google_drive"),
+        name=filename,
+        original_name=filename,
+        mime_type=chunk.content_type or "application/octet-stream",
+        extension=extension,
+        size=actual_size,
+        checksum=checksum,
+        visibility=visibility.upper(),
+        status="ACTIVE",
+        price=price if visibility.upper() == "PAID" else 0.0,
+        download_count=0,
+        view_count=0
+    )
+    db.add(new_file)
+    await db.flush()
+
+    short_code = generate_short_code()
+    while True:
+        c_stmt = select(ShareLink).where(ShareLink.short_code == short_code)
+        c_res = await db.execute(c_stmt)
+        if not c_res.scalar_one_or_none():
+            break
+        short_code = generate_short_code()
+
+    default_share = ShareLink(
+        file_id=new_file.id,
+        short_code=short_code,
+        created_by=current_user.id,
+        expires_at=None,
+        password_hash=None,
+        download_limit=None,
+        is_active=True
+    )
+    db.add(default_share)
+    await db.flush()
+
+    await ReferralService.qualify_referral(current_user.id, db)
+
+    client_ip = request.client.host if request.client else "unknown"
+    await AuditService.log_action(
+        action="FILE_UPLOADED_CHUNKED",
+        session=db,
+        user_id=current_user.id,
+        target_type="file",
+        target_id=new_file.id,
+        ip_address=client_ip,
+        details=f"Uploaded chunked '{new_file.name}' ({actual_size} bytes, {total_chunks} chunks)"
     )
 
     await db.commit()
