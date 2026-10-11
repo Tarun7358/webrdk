@@ -377,21 +377,9 @@ export const DownloadPage: React.FC = () => {
                         </>
                       )}
                     </a>
-                    {downloadStarted ? (
-                      <div className="p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 max-w-sm mx-auto space-y-1">
-                        <div className="font-bold flex items-center justify-center gap-1.5">
-                          <Check className="w-4 h-4 text-emerald-400" />
-                          <span>Download thread initiated!</span>
-                        </div>
-                        <div className="text-[11px] text-gray-300">
-                          On iPhone / Safari: Check the download icon <strong>(⬇️)</strong> in your browser address bar to view file progress.
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-500 font-mono">
-                        Direct Google Drive edge pipe • Uncapped speed • Instant handshake
-                      </div>
-                    )}
+                    <div className="text-xs text-gray-500 font-mono">
+                      Direct Google Drive edge pipe • Uncapped speed • Instant handshake
+                    </div>
                   </div>
                 )}
               </div>
