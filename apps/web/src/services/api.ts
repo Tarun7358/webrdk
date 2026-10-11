@@ -69,7 +69,74 @@ export const api = {
   getMe: () => request<any>('/auth/me'),
 
   // Files
-  uploadFile: (formData: FormData) => request<any>('/files/upload', { method: 'POST', body: formData }),
+  uploadFile: (
+    formData: FormData,
+    onProgress?: (loadedBytes: number, totalBytes: number) => void,
+    signal?: AbortSignal
+  ): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE}/files/upload`);
+
+      const token = localStorage.getItem('rage_token');
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      if (signal) {
+        if (signal.aborted) {
+          return reject(new DOMException('Upload cancelled by user', 'AbortError'));
+        }
+        signal.addEventListener('abort', () => {
+          xhr.abort();
+          reject(new DOMException('Upload cancelled by user', 'AbortError'));
+        });
+      }
+
+      if (xhr.upload && onProgress) {
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            onProgress(event.loaded, event.total);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        const contentType = xhr.getResponseHeader('content-type') || '';
+        if (contentType.includes('text/html')) {
+          return reject(
+            new Error(
+              `Backend URL misconfigured: Received HTML instead of JSON from ${API_BASE}/files/upload. Please check backend routing.`
+            )
+          );
+        }
+
+        let resJson: any = null;
+        try {
+          resJson = JSON.parse(xhr.responseText);
+        } catch {
+          // ignore parse error
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(resJson);
+        } else {
+          const errorDetail = resJson?.detail || xhr.statusText || 'Storage transmission failed';
+          reject(new Error(errorDetail));
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error(`Unable to reach backend API at ${API_BASE}. Make sure your backend server is running.`));
+      };
+
+      xhr.onabort = () => {
+        reject(new DOMException('Upload cancelled by user', 'AbortError'));
+      };
+
+      xhr.send(formData);
+    });
+  },
   getMyFiles: (search?: string, visibility?: string) => {
     const params = new URLSearchParams();
     if (search) params.append('search', search);

@@ -14,7 +14,10 @@ import {
   ShieldCheck,
   Copy,
   ExternalLink,
-  HardDrive
+  HardDrive,
+  Minus,
+  Maximize2,
+  X
 } from 'lucide-react';
 import { copyToClipboard } from '../utils/clipboard';
 
@@ -24,12 +27,35 @@ export const UploadPage: React.FC = () => {
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE' | 'UNLISTED' | 'PAID'>('PUBLIC');
   const [price, setPrice] = useState<number>(49);
   const [isUploading, setIsUploading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [loadedBytes, setLoadedBytes] = useState(0);
+  const [totalBytes, setTotalBytes] = useState(0);
+  const [uploadSpeed, setUploadSpeed] = useState('');
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const startTimeRef = useRef<number>(0);
   const navigate = useNavigate();
+
+  const formatMB = (bytes: number): string => {
+    return (bytes / (1024 * 1024)).toFixed(2);
+  };
+
+  const getFileExtension = (filename: string): string => {
+    if (!filename) return 'FILE';
+    const parts = filename.split('.');
+    if (parts.length > 1) {
+      const ext = parts.pop()?.toUpperCase() || 'FILE';
+      return ext.length > 5 ? ext.substring(0, 4) : ext;
+    }
+    return 'FILE';
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -46,6 +72,19 @@ export const UploadPage: React.FC = () => {
     }
   };
 
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsUploading(false);
+    setIsVerifying(false);
+    setUploadProgress(0);
+    setLoadedBytes(0);
+    setUploadSpeed('');
+    setShowUploadModal(false);
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedFile) {
@@ -53,9 +92,19 @@ export const UploadPage: React.FC = () => {
       return;
     }
 
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setIsUploading(true);
-    setUploadProgress(15);
+    setIsVerifying(false);
+    setUploadProgress(0);
+    setLoadedBytes(0);
+    setTotalBytes(selectedFile.size);
+    setUploadSpeed('');
     setError(null);
+    setShowUploadModal(true);
+    setIsModalMinimized(false);
+    startTimeRef.current = performance.now();
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -63,16 +112,50 @@ export const UploadPage: React.FC = () => {
     formData.append('price', visibility === 'PAID' ? String(price) : '0.0');
 
     try {
-      setUploadProgress(55);
-      const res = await api.uploadFile(formData);
+      const res = await api.uploadFile(
+        formData,
+        (loaded, total) => {
+          setLoadedBytes(loaded);
+          setTotalBytes(total);
+          const percent = total > 0 ? Math.min(Math.round((loaded / total) * 100), 100) : 0;
+          setUploadProgress(percent);
+
+          const now = performance.now();
+          const elapsed = (now - startTimeRef.current) / 1000;
+          if (elapsed > 0.3 && loaded > 0) {
+            const bytesPerSec = loaded / elapsed;
+            const mbPerSec = bytesPerSec / (1024 * 1024);
+            if (mbPerSec >= 1) {
+              setUploadSpeed(`${mbPerSec.toFixed(2)} MB/s`);
+            } else {
+              setUploadSpeed(`${(bytesPerSec / 1024).toFixed(0)} KB/s`);
+            }
+          }
+
+          if (loaded >= total) {
+            setIsVerifying(true);
+          }
+        },
+        abortController.signal
+      );
+
       setUploadProgress(100);
+      setIsVerifying(false);
       setUploadSuccess(res);
       refreshUser();
       window.dispatchEvent(new CustomEvent('rage-storage-updated'));
     } catch (err: any) {
-      setError(err.message || 'Storage transmission failed');
+      if (err.name === 'AbortError' || err.message?.includes('cancelled')) {
+        setError(null);
+        setShowUploadModal(false);
+      } else {
+        setError(err.message || 'Storage transmission failed');
+        setShowUploadModal(false);
+      }
     } finally {
       setIsUploading(false);
+      setIsVerifying(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -91,6 +174,23 @@ export const UploadPage: React.FC = () => {
         setTimeout(() => setCopied(false), 2000);
       }
     }
+  };
+
+  const handleShare = async () => {
+    const url = getPublicShareUrl();
+    if (!url) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: selectedFile?.name || 'Shared File',
+          url,
+        });
+        return;
+      } catch {
+        // Fallback to copy
+      }
+    }
+    copyShareLink();
   };
 
   return (
@@ -317,19 +417,25 @@ export const UploadPage: React.FC = () => {
             )}
           </div>
 
-          {/* Upload Progress Bar */}
+          {/* Upload Progress Bar (Inline) */}
           {isUploading && (
             <div className="glass-panel p-5 rounded-2xl border border-rage-accent/30 space-y-2.5">
-              <div className="flex justify-between text-xs text-gray-300">
+              <div className="flex justify-between items-center text-xs text-gray-300">
                 <span className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-rage-accent animate-ping" />
-                  Streaming payload to Google Drive nodes...
+                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                  {isVerifying ? (
+                    <span className="text-blue-400 font-medium">Verifying file & synchronizing storage...</span>
+                  ) : (
+                    <span>
+                      Streaming payload to cloud nodes... ({formatMB(loadedBytes)} MB / {formatMB(totalBytes || selectedFile?.size || 0)} MB)
+                    </span>
+                  )}
                 </span>
                 <span className="font-mono font-bold text-white">{uploadProgress}%</span>
               </div>
               <div className="w-full bg-white/5 rounded-full h-3 overflow-hidden p-0.5 border border-white/10">
                 <div
-                  className="bg-gradient-to-r from-red-600 via-rage-accent to-rose-400 h-full rounded-full transition-all duration-300"
+                  className="bg-gradient-to-r from-blue-600 via-rage-electric to-cyan-400 h-full rounded-full transition-all duration-150"
                   style={{ width: `${uploadProgress}%` }}
                 />
               </div>
@@ -340,12 +446,16 @@ export const UploadPage: React.FC = () => {
           <button
             type="submit"
             disabled={!selectedFile || isUploading}
-            className="w-full py-4 bg-rage-accent hover:bg-rage-600 disabled:opacity-40 text-white font-extrabold text-sm rounded-2xl transition-all shadow-rage-glow hover:scale-[1.01] flex items-center justify-center gap-2.5"
+            className="w-full py-4 bg-rage-accent hover:bg-rage-600 disabled:opacity-40 text-white font-extrabold text-sm rounded-2xl transition-all shadow-rage-glow hover:scale-[1.01] flex items-center justify-center gap-2.5 cursor-pointer disabled:cursor-not-allowed"
           >
             {isUploading ? (
               <div className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Encrypting & Dispatching...</span>
+                <span>
+                  {isVerifying
+                    ? 'Verifying & Syncing...'
+                    : `Uploading (${formatMB(loadedBytes)} / ${formatMB(totalBytes || selectedFile?.size || 0)} MB)...`}
+                </span>
               </div>
             ) : (
               <>
@@ -355,6 +465,211 @@ export const UploadPage: React.FC = () => {
             )}
           </button>
         </form>
+      )}
+
+      {/* Real-time Upload Modal (MediaFire / Cloud Manager Style) */}
+      {showUploadModal && !isModalMinimized && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl bg-[#131926] border border-white/10 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="px-6 py-4 flex items-center justify-between border-b border-white/5 bg-[#101520]">
+              <div className="text-sm sm:text-base font-semibold text-slate-100 flex items-center gap-2">
+                <span>{uploadSuccess ? 'Upload Complete' : 'Uploading 1 File'}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setIsModalMinimized(true)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Minimize"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+                {uploadSuccess && (
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadModal(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                    title="Close"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Modal File List / Content Area */}
+            <div className="p-6 sm:p-8 min-h-[140px] flex items-center">
+              <div className="w-full flex items-center justify-between gap-4">
+                {/* File Icon & Info */}
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <div className="w-11 h-11 rounded-lg bg-[#1c2436] border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
+                    <span className="text-[10px] font-black text-slate-200 tracking-wider font-mono uppercase">
+                      {getFileExtension(selectedFile?.name || '')}
+                    </span>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-semibold text-white truncate max-w-xs sm:max-w-md">
+                      {selectedFile?.name}
+                    </div>
+                    <div className="text-xs text-slate-400 font-mono mt-0.5">
+                      {formatMB(selectedFile?.size || 0)} MB
+                    </div>
+                  </div>
+                </div>
+
+                {/* File Status & Actions on Right */}
+                <div className="flex items-center gap-4 shrink-0">
+                  {uploadSuccess && (
+                    <div className="flex items-center gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={handleShare}
+                        className="text-blue-400 hover:text-blue-300 font-semibold transition-colors cursor-pointer"
+                      >
+                        Share
+                      </button>
+                      <button
+                        type="button"
+                        onClick={copyShareLink}
+                        className="text-blue-400 hover:text-blue-300 font-semibold transition-colors cursor-pointer"
+                      >
+                        {copied ? 'Copied!' : 'Copy Link'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Micro Progress Bar */}
+                  <div className="w-24 sm:w-32 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className={`h-full transition-all duration-150 ${
+                        uploadSuccess ? 'bg-emerald-500' : 'bg-[#2563eb]'
+                      }`}
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Progress Bar across Modal */}
+            <div className="w-full bg-[#1b2333] h-1.5 overflow-hidden">
+              <div
+                className={`h-full transition-all duration-150 ${
+                  uploadSuccess ? 'bg-emerald-500' : 'bg-[#2563eb]'
+                }`}
+                style={{ width: `${uploadProgress}%` }}
+              />
+            </div>
+
+            {/* Bottom Status & Controls Bar */}
+            <div className="px-6 py-3.5 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-300 bg-[#0e131e] border-t border-white/5">
+              {/* Real-time MB Transmitted */}
+              <div className="font-mono flex items-center gap-2">
+                <span className="text-white font-semibold">
+                  {formatMB(loadedBytes)} MB / {formatMB(totalBytes || selectedFile?.size || 0)} MB
+                </span>
+                {uploadSpeed && isUploading && !isVerifying && (
+                  <span className="text-slate-400 font-sans text-[11px]">({uploadSpeed})</span>
+                )}
+              </div>
+
+              {/* Status / Message */}
+              <div className="flex items-center gap-4 ml-auto">
+                {uploadSuccess ? (
+                  <span className="text-emerald-400 font-medium flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Uploaded successfully
+                  </span>
+                ) : isVerifying ? (
+                  <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-blue-500 animate-ping" />
+                    Verifying 1 file...
+                  </span>
+                ) : isUploading ? (
+                  <span className="text-slate-400">
+                    Uploading... {uploadProgress}%
+                  </span>
+                ) : null}
+
+                {/* Cancel or Done Action */}
+                {isUploading ? (
+                  <button
+                    type="button"
+                    onClick={handleCancelUpload}
+                    className="px-4 py-1.5 rounded border border-white/20 hover:border-red-500/50 hover:bg-red-500/10 text-slate-300 hover:text-red-300 text-xs font-semibold tracking-wider uppercase transition-colors cursor-pointer"
+                  >
+                    CANCEL
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadModal(false)}
+                    className="px-4 py-1.5 rounded bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold tracking-wider uppercase transition-colors shadow-md shadow-blue-600/30 cursor-pointer"
+                  >
+                    DONE
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Minimized Floating Upload Pill (Bottom Right) */}
+      {showUploadModal && isModalMinimized && (
+        <div className="fixed bottom-6 right-6 z-50 bg-[#131926] border border-white/10 rounded-2xl shadow-2xl p-4 w-80 sm:w-96 space-y-2.5 animate-in fade-in slide-in-from-bottom-4 duration-200">
+          <div className="flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2 font-medium text-white truncate max-w-[200px]">
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 uppercase">
+                {getFileExtension(selectedFile?.name || '')}
+              </span>
+              <span className="truncate">{selectedFile?.name}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setIsModalMinimized(false)}
+                className="p-1 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
+                title="Expand"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+              </button>
+              {uploadSuccess && (
+                <button
+                  type="button"
+                  onClick={() => setShowUploadModal(false)}
+                  className="p-1 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
+                  title="Close"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-150 ${
+                uploadSuccess ? 'bg-emerald-500' : 'bg-[#2563eb]'
+              }`}
+              style={{ width: `${uploadProgress}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400">
+            <span>
+              {formatMB(loadedBytes)} / {formatMB(totalBytes || selectedFile?.size || 0)} MB
+            </span>
+            {isVerifying ? (
+              <span className="text-blue-400 font-sans font-medium">Verifying 1 file...</span>
+            ) : uploadSuccess ? (
+              <span className="text-emerald-400 font-sans font-medium">Complete</span>
+            ) : (
+              <span>{uploadProgress}%</span>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
